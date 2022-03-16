@@ -26,6 +26,8 @@ const (
 	maxBackoff        = 60 * time.Second
 )
 
+var Redirect = ""
+
 // AppClient is a client to an app, dealing with report publishing, controls and pipes.
 type AppClient interface {
 	Details() (xfer.Details, error)

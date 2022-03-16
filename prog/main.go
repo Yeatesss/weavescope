@@ -95,6 +95,7 @@ type flags struct {
 
 type probeFlags struct {
 	printOnStdout          bool
+	hostId                 string
 	basicAuth              bool
 	username               string
 	password               string
@@ -309,6 +310,7 @@ func setupFlags(flags *flags) {
 	flag.BoolVar(&flags.probe.noControls, "probe.no-controls", false, "Disable controls (e.g. start/stop containers, terminals, logs ...)")
 	flag.BoolVar(&flags.probe.noCommandLineArguments, "probe.omit.cmd-args", false, "Disable collection of command-line arguments")
 	flag.BoolVar(&flags.probe.noEnvironmentVariables, "probe.omit.env-vars", true, "Disable collection of environment variables")
+	flag.StringVar(&flags.probe.hostId, "probe.hostid", "", "Used to uniquely identify node")
 
 	flag.BoolVar(&flags.probe.insecure, "probe.insecure", false, "(SSL) explicitly allow \"insecure\" SSL connections and transfers")
 	flag.StringVar(&flags.probe.resolver, "probe.resolver", "", "IP address & port of resolver to use.  Default is to use system resolver.")
@@ -349,7 +351,6 @@ func setupFlags(flags *flags) {
 	flag.StringVar(&flags.probe.kubernetesClientConfig.User, "probe.kubernetes.user", "", "The name of the kubeconfig user to use")
 	flag.StringVar(&flags.probe.kubernetesClientConfig.Username, "probe.kubernetes.username", "", "Username for basic authentication to the API server")
 	flag.StringVar(&flags.probe.kubernetesNodeName, "probe.kubernetes.node-name", "", "Name of this node, for filtering pods")
-
 	// AWS ECS
 	flag.BoolVar(&flags.probe.ecsEnabled, "probe.ecs", false, "Collect ecs-related attributes for containers on this node")
 	flag.IntVar(&flags.probe.ecsCacheSize, "probe.ecs.cache.size", 1024*1024, "Max size of cached info for each ECS cluster")
@@ -468,6 +469,8 @@ func main() {
 			log.Fatalf("Invalid targets: %v", err)
 		}
 	}
+
+	appclient.Redirect = os.Getenv("MY_NODE_IP")
 
 	// Node name may be set by environment variable, e.g. from the Kubernetes downward API
 	if flags.probe.kubernetesNodeName == "" {

@@ -47,7 +47,7 @@ update-cri:
 protoc-gen-gofast:
 	@go get -u -v github.com/gogo/protobuf/protoc-gen-gofast
 
-# Use cri target to download latest cri proto files and regenerate CRI runtime files. 
+# Use cri target to download latest cri proto files and regenerate CRI runtime files.
 cri: update-cri protoc-gen-gofast
 	@cd $(GOPATH)/src;protoc --proto_path=$(GOPATH)/src --gofast_out=plugins=grpc:. github.com/weaveworks/scope/cri/runtime/api.proto
 
@@ -94,7 +94,7 @@ $(SCOPE_EXE) $(RUNSVINIT) lint tests shell prog/staticui/staticui.go prog/extern
 		-e HOME=/go/src/github.com/weaveworks/scope \
 		-e GOARCH -e GOOS -e CIRCLECI -e CIRCLE_BUILD_NUM -e CIRCLE_NODE_TOTAL \
 		-e CIRCLE_NODE_INDEX -e COVERDIR -e SLOW -e TESTDIRS \
-		$(SCOPE_BACKEND_BUILD_IMAGE) SCOPE_VERSION=$(SCOPE_VERSION) CODECGEN_UID=$(CODECGEN_UID) $@
+		$(SCOPE_BACKEND_BUILD_IMAGE):build-updates-1b1c9664 SCOPE_VERSION=$(SCOPE_VERSION) CODECGEN_UID=$(CODECGEN_UID) $@
 
 else
 
@@ -120,7 +120,7 @@ shell:
 tests: $(CODECGEN_TARGETS) prog/staticui/staticui.go prog/externalui/externalui.go
 	./tools/test -no-go-get -tags $(GO_BUILD_TAGS)
 
-lint: prog/staticui/staticui.go prog/externalui/externalui.go 
+lint: prog/staticui/staticui.go prog/externalui/externalui.go
 	./tools/lint
 
 prog/staticui/staticui.go:

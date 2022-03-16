@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/gorilla/mux"
+	"github.com/tylerb/graceful"
 	"math/rand"
 	"net"
 	"net/http"
@@ -42,9 +44,8 @@ import (
 )
 
 const (
-	versionCheckPeriod = 6 * time.Hour
-	defaultServiceHost = "https://cloud.weave.works.:443"
-
+	versionCheckPeriod    = 6 * time.Hour
+	defaultServiceHost    = "https://cloud.weave.works.:443"
 	kubernetesRoleHost    = "host"
 	kubernetesRoleCluster = "cluster"
 )
@@ -97,8 +98,15 @@ func maybeExportProfileData(flags probeFlags) {
 
 // Main runs the probe
 func probeMain(flags probeFlags, targets []appclient.Target) {
+	var hostId = os.Getenv("PROBE_HOSTID")
 	setLogLevel(flags.logLevel)
 	setLogFormatter(flags.logPrefix)
+	log.Infof("HostId being acquired ...")
+
+	if flags.hostId != "" {
+		hostId = flags.hostId
+	}
+	log.Infof("HostId has been acquired:" + hostId)
 
 	if flags.basicAuth {
 		log.Infof("Basic authentication enabled")
@@ -156,7 +164,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	var (
 		probeID  = strconv.FormatInt(rand.Int63(), 16)
 		hostName = hostname.Get()
-		hostID   = hostName // TODO(pb): we should sanitize the hostname
+		hostID   = hostId // TODO(pb): we should sanitize the hostname
 	)
 	log.Infof("probe starting, version %s, ID %s", version, probeID)
 	checkNewScopeVersion(flags)
@@ -198,6 +206,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 			report.StdoutPublisher
 			controls.DummyPipeClient
 		})
+
 	} else {
 		multiClients := appclient.NewMultiAppClient(clientFactory, flags.noControls)
 		defer multiClients.Stop()
@@ -379,8 +388,46 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	maybeExportProfileData(flags)
 
 	p.Start()
+	go httpServer(clients)
+
 	signals.SignalHandlerLoop(
 		logging.Logrus(log.StandardLogger()),
 		p,
+	)
+}
+
+func httpServer(client interface {
+	probe.ReportPublisher
+	controls.PipeClient
+}) {
+	logger := logging.Logrus(log.StandardLogger())
+	router := mux.NewRouter().SkipClean(true)
+	probe.RegisterRedirectReportPostHandler(router, client)
+
+	server := &graceful.Server{
+		// we want to manage the stop condition ourselves below
+		NoSignalHandling: true,
+		Server: &http.Server{
+			Addr:           ":6789",
+			Handler:        router,
+			ReadTimeout:    httpTimeout,
+			WriteTimeout:   httpTimeout,
+			MaxHeaderBytes: 1 << 20,
+		},
+	}
+	go func() {
+		log.Infof("listening on %s", ":6789")
+		if err := server.ListenAndServe(); err != nil {
+			log.Error(err)
+		}
+	}()
+
+	// block until INT/TERM
+	signals.SignalHandlerLoop(
+		logger,
+		stopper{
+			Server:      server,
+			StopTimeout: 5 * time.Second,
+		},
 	)
 }
