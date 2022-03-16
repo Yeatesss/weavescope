@@ -1,13 +1,12 @@
 package kubernetes
 
 import (
-	"k8s.io/apimachinery/pkg/labels"
-
 	"github.com/weaveworks/common/mtime"
 	"github.com/weaveworks/scope/probe"
 	"github.com/weaveworks/scope/probe/controls"
 	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/report"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // These constants are keys used in node metadata
@@ -393,7 +392,7 @@ func (r *Reporter) serviceTopology() (report.Topology, []Service, error) {
 	)
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkServices(func(s Service) error {
-		result.AddNode(s.GetNode(r.probeID))
+		result.AddNode(s.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		services = append(services, s)
 		return nil
 	})
@@ -412,7 +411,7 @@ func (r *Reporter) deploymentTopology() (report.Topology, []Deployment, error) {
 	result.Controls.AddControl(DescribeControl)
 
 	err := r.client.WalkDeployments(func(d Deployment) error {
-		result.AddNode(d.GetNode(r.probeID))
+		result.AddNode(d.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		deployments = append(deployments, d)
 		return nil
 	})
@@ -427,7 +426,7 @@ func (r *Reporter) daemonSetTopology() (report.Topology, []DaemonSet, error) {
 		WithTableTemplates(TableTemplates)
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkDaemonSets(func(d DaemonSet) error {
-		result.AddNode(d.GetNode(r.probeID))
+		result.AddNode(d.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		daemonSets = append(daemonSets, d)
 		return nil
 	})
@@ -442,7 +441,7 @@ func (r *Reporter) statefulSetTopology() (report.Topology, []StatefulSet, error)
 		WithTableTemplates(TableTemplates)
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkStatefulSets(func(s StatefulSet) error {
-		result.AddNode(s.GetNode(r.probeID))
+		result.AddNode(s.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		statefulSets = append(statefulSets, s)
 		return nil
 	})
@@ -457,7 +456,7 @@ func (r *Reporter) cronJobTopology() (report.Topology, []CronJob, error) {
 		WithTableTemplates(TableTemplates)
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkCronJobs(func(c CronJob) error {
-		result.AddNode(c.GetNode(r.probeID))
+		result.AddNode(c.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		cronJobs = append(cronJobs, c)
 		return nil
 	})
@@ -471,7 +470,7 @@ func (r *Reporter) persistentVolumeTopology() (report.Topology, []PersistentVolu
 		WithTableTemplates(TableTemplates)
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkPersistentVolumes(func(p PersistentVolume) error {
-		result.AddNode(p.GetNode(r.probeID))
+		result.AddNode(p.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		persistentVolumes = append(persistentVolumes, p)
 		return nil
 	})
@@ -491,7 +490,7 @@ func (r *Reporter) persistentVolumeClaimTopology() (report.Topology, []Persisten
 	})
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkPersistentVolumeClaims(func(p PersistentVolumeClaim) error {
-		result.AddNode(p.GetNode(r.probeID))
+		result.AddNode(p.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		persistentVolumeClaims = append(persistentVolumeClaims, p)
 		return nil
 	})
@@ -505,7 +504,7 @@ func (r *Reporter) storageClassTopology() (report.Topology, []StorageClass, erro
 		WithTableTemplates(TableTemplates)
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkStorageClasses(func(p StorageClass) error {
-		result.AddNode(p.GetNode(r.probeID))
+		result.AddNode(p.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		storageClasses = append(storageClasses, p)
 		return nil
 	})
@@ -531,7 +530,7 @@ func (r *Reporter) volumeSnapshotTopology() (report.Topology, []VolumeSnapshot, 
 	})
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkVolumeSnapshots(func(p VolumeSnapshot) error {
-		result.AddNode(p.GetNode(r.probeID))
+		result.AddNode(p.GetNode(r.probeID).WithLatest("host_node_id", mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		volumeSnapshots = append(volumeSnapshots, p)
 		return nil
 	})
@@ -545,7 +544,7 @@ func (r *Reporter) volumeSnapshotDataTopology() (report.Topology, []VolumeSnapsh
 		WithTableTemplates(TableTemplates)
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkVolumeSnapshotData(func(p VolumeSnapshotData) error {
-		result.AddNode(p.GetNode(r.probeID))
+		result.AddNode(p.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		volumeSnapshotData = append(volumeSnapshotData, p)
 		return nil
 	})
@@ -560,7 +559,7 @@ func (r *Reporter) jobTopology() (report.Topology, []Job, error) {
 		WithTableTemplates(TableTemplates)
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkJobs(func(c Job) error {
-		result.AddNode(c.GetNode(r.probeID))
+		result.AddNode(c.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		jobs = append(jobs, c)
 		return nil
 	})
@@ -685,7 +684,7 @@ func (r *Reporter) podTopology(services []Service, deployments []Deployment, dae
 		for _, selector := range selectors {
 			selector(p)
 		}
-		pods.AddNode(p.GetNode(r.probeID))
+		pods.AddNode(p.GetNode(r.probeID).WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		return nil
 	})
 	return pods, err
@@ -694,7 +693,7 @@ func (r *Reporter) podTopology(services []Service, deployments []Deployment, dae
 func (r *Reporter) namespaceTopology() (report.Topology, error) {
 	result := report.MakeTopology()
 	err := r.client.WalkNamespaces(func(ns NamespaceResource) error {
-		result.AddNode(ns.GetNode())
+		result.AddNode(ns.GetNode().WithLatest(report.HostNodeID, mtime.Now(), report.MakeHostNodeID(r.hostID)))
 		return nil
 	})
 	return result, err
