@@ -107,6 +107,7 @@ const (
 	ECSScaleDown           = "ecs_scale_down"
 	// probe/host
 	Timestamp         = "ts"
+	DockerVersion     = "docker_version"
 	HostName          = "host_name"
 	HostLocalNetworks = "local_networks"
 	OS                = "os"
@@ -138,6 +139,7 @@ var commonKeys = map[string]string{
 	StatefulSet:           StatefulSet,
 	CronJob:               CronJob,
 	ContainerImage:        ContainerImage,
+	UnuseImage:            UnuseImage,
 	Host:                  Host,
 	Overlay:               Overlay,
 	ECSService:            ECSService,

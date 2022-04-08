@@ -2,6 +2,8 @@ package host
 
 import (
 	"fmt"
+	docker_client "github.com/fsouza/go-dockerclient"
+	log "github.com/sirupsen/logrus"
 	"runtime"
 	"strconv"
 	"sync"
@@ -14,6 +16,7 @@ import (
 
 // Keys for use in Node.Latest.
 const (
+	DockerVersion = report.DockerVersion
 	Timestamp     = report.Timestamp
 	HostName      = report.HostName
 	LocalNetworks = report.HostLocalNetworks
@@ -63,11 +66,30 @@ type Reporter struct {
 	hostShellCmd    []string
 	handlerRegistry *controls.HandlerRegistry
 	pipeIDToTTY     map[string]uintptr
+	dockerClient    Client
+}
+
+var NewDockerClientStub = newDockerClient
+
+// Client interface for mocking.
+type Client interface {
+	Version() (*docker_client.Env, error)
+}
+
+func newDockerClient(endpoint string) (Client, error) {
+	if endpoint == "" {
+		return docker_client.NewClientFromEnv()
+	}
+	return docker_client.NewClient(endpoint)
 }
 
 // NewReporter returns a Reporter which produces a report containing host
 // topology for this host.
 func NewReporter(hostID, hostName, probeID, version string, pipes controls.PipeClient, handlerRegistry *controls.HandlerRegistry) *Reporter {
+	client, err := NewDockerClientStub("")
+	if err != nil {
+		client = nil
+	}
 	r := &Reporter{
 		hostID:          hostID,
 		hostName:        hostName,
@@ -77,6 +99,7 @@ func NewReporter(hostID, hostName, probeID, version string, pipes controls.PipeC
 		hostShellCmd:    getHostShellCmd(),
 		handlerRegistry: handlerRegistry,
 		pipeIDToTTY:     map[string]uintptr{},
+		dockerClient:    client,
 	}
 	r.registerControls()
 	return r
@@ -91,8 +114,9 @@ var GetLocalNetworks = report.GetLocalNetworks
 // Report implements Reporter.
 func (r *Reporter) Report() (report.Report, error) {
 	var (
-		rep        = report.MakeReport()
-		localCIDRs []string
+		rep           = report.MakeReport()
+		localCIDRs    []string
+		dockerVersion string
 	)
 
 	localNets, err := GetLocalNetworks()
@@ -123,9 +147,17 @@ func (r *Reporter) Report() (report.Report, error) {
 	metrics[CPUUsage] = report.MakeSingletonMetric(now, cpuUsage).WithMax(max)
 	memoryUsage, max := GetMemoryUsageBytes()
 	metrics[MemoryUsage] = report.MakeSingletonMetric(now, memoryUsage).WithMax(max)
+	if r.dockerClient != nil {
+		env, e := r.dockerClient.Version()
+		log.Info("docker_version:", env)
+		if e == nil && env != nil && env.Exists("Version") {
+			dockerVersion = env.Get("Version")
+		}
 
+	}
 	rep.Host.AddNode(
 		report.MakeNodeWith(report.MakeHostNodeID(r.hostID), map[string]string{
+			DockerVersion:         dockerVersion,
 			report.ControlProbeID: r.probeID,
 			Timestamp:             mtime.Now().UTC().Format(time.RFC3339Nano),
 			HostName:              r.hostName,
