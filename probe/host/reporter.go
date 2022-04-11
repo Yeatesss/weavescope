@@ -16,17 +16,21 @@ import (
 
 // Keys for use in Node.Latest.
 const (
-	DockerVersion = report.DockerVersion
-	Timestamp     = report.Timestamp
-	HostName      = report.HostName
-	LocalNetworks = report.HostLocalNetworks
-	OS            = report.OS
-	KernelVersion = report.KernelVersion
-	Uptime        = report.Uptime
-	Load1         = report.Load1
-	CPUUsage      = report.HostCPUUsage
-	MemoryUsage   = report.HostMemoryUsage
-	ScopeVersion  = report.ScopeVersion
+	DockerVersion    = report.DockerVersion
+	DockerApiVersion = report.DockerApiVersion
+	DockerGoVersion  = report.DockerGoVersion
+	DockerDriver     = report.DockerDriver
+	DockerRootDir    = report.DockerRootDir
+	Timestamp        = report.Timestamp
+	HostName         = report.HostName
+	LocalNetworks    = report.HostLocalNetworks
+	OS               = report.OS
+	KernelVersion    = report.KernelVersion
+	Uptime           = report.Uptime
+	Load1            = report.Load1
+	CPUUsage         = report.HostCPUUsage
+	MemoryUsage      = report.HostMemoryUsage
+	ScopeVersion     = report.ScopeVersion
 )
 
 // Exposed for testing.
@@ -74,6 +78,7 @@ var NewDockerClientStub = newDockerClient
 // Client interface for mocking.
 type Client interface {
 	Version() (*docker_client.Env, error)
+	Info() (*docker_client.DockerInfo, error)
 }
 
 func newDockerClient(endpoint string) (Client, error) {
@@ -117,6 +122,10 @@ func (r *Reporter) Report() (report.Report, error) {
 		rep           = report.MakeReport()
 		localCIDRs    []string
 		dockerVersion string
+		dockerDrive   string
+		dockerRootDir string
+		apiVersion    string
+		goVersion     string
 	)
 
 	localNets, err := GetLocalNetworks()
@@ -149,15 +158,28 @@ func (r *Reporter) Report() (report.Report, error) {
 	metrics[MemoryUsage] = report.MakeSingletonMetric(now, memoryUsage).WithMax(max)
 	if r.dockerClient != nil {
 		env, e := r.dockerClient.Version()
-		log.Info("docker_version:", env)
 		if e == nil && env != nil && env.Exists("Version") {
+			log.Info("docker:", env)
+
 			dockerVersion = env.Get("Version")
+			apiVersion = env.Get("ApiVersion")
+			goVersion = env.Get("GoVersion")
+		}
+		info, e := r.dockerClient.Info()
+		if e == nil {
+			dockerDrive = info.Driver
+			dockerRootDir = info.DockerRootDir
 		}
 
 	}
+
 	rep.Host.AddNode(
 		report.MakeNodeWith(report.MakeHostNodeID(r.hostID), map[string]string{
 			DockerVersion:         dockerVersion,
+			DockerApiVersion:      apiVersion,
+			DockerDriver:          dockerDrive,
+			DockerRootDir:         dockerRootDir,
+			DockerGoVersion:       goVersion,
 			report.ControlProbeID: r.probeID,
 			Timestamp:             mtime.Now().UTC().Format(time.RFC3339Nano),
 			HostName:              r.hostName,

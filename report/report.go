@@ -26,6 +26,9 @@ const (
 	CronJob               = "cron_job"
 	Namespace             = "namespace"
 	ContainerImage        = "container_image"
+	Mount                 = "mount"
+	Network               = "network"
+	UnuseImage            = "unuse_image"
 	Host                  = "host"
 	Overlay               = "overlay"
 	ECSService            = "ecs_service"
@@ -63,6 +66,7 @@ var topologyNames = []string{
 	Process,
 	Container,
 	ContainerImage,
+	UnuseImage,
 	Pod,
 	Service,
 	Deployment,
@@ -149,6 +153,10 @@ type Report struct {
 	// Edges are not present.
 	ContainerImage Topology
 
+	// UnusedImage nodes represent in addition to being instantiated as a container images on
+	// hosts running probes. Metadata includes things like image id, name etc.
+	// Edges are not present.
+	UnusedImage Topology
 	// Host nodes are physical hosts that run probes. Metadata includes things
 	// like operating system, load, etc. The information is scraped by the
 	// probes with each published report. Edges are not present.
@@ -238,6 +246,10 @@ func MakeReport() Report {
 		ContainerImage: MakeTopology().
 			WithShape(Hexagon).
 			WithLabel("image", "images"),
+
+		UnusedImage: MakeTopology().
+			WithShape(Hexagon).
+			WithLabel("unused image", "unused images"),
 
 		Host: MakeTopology().
 			WithShape(Circle).
@@ -425,6 +437,8 @@ func (r *Report) topology(name string) *Topology {
 		return &r.Container
 	case ContainerImage:
 		return &r.ContainerImage
+	case UnuseImage:
+		return &r.UnusedImage
 	case Pod:
 		return &r.Pod
 	case Service:
@@ -559,6 +573,7 @@ const (
 	// a node in the host topology. That host node is the origin host, where
 	// the node was originally detected.
 	HostNodeID = "host_node_id"
+	HostId     = "host_id"
 	// ControlProbeID is the random ID of the probe which controls the specific node.
 	ControlProbeID = "control_probe_id"
 )

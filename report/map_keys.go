@@ -108,6 +108,10 @@ const (
 	// probe/host
 	Timestamp         = "ts"
 	DockerVersion     = "docker_version"
+	DockerGoVersion   = "docker_goversion"
+	DockerDriver      = "docker_driver"
+	DockerRootDir     = "docker_rootdir"
+	DockerApiVersion  = "docker_apiversion"
 	HostName          = "host_name"
 	HostLocalNetworks = "local_networks"
 	OS                = "os"

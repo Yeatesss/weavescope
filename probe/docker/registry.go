@@ -37,6 +37,7 @@ type Registry interface {
 	LockedPIDLookup(f func(func(int) Container))
 	WalkContainers(f func(Container))
 	WalkImages(f func(docker_client.APIImages))
+	WalkUnusedImages(f func(docker_client.APIImages))
 	WalkNetworks(f func(docker_client.Network))
 	WatchContainerUpdates(ContainerUpdateWatcher)
 	GetContainer(string) (Container, bool)
@@ -63,6 +64,7 @@ type registry struct {
 	containers      *radix.Tree
 	containersByPID map[int]Container
 	images          map[string]docker_client.APIImages
+	usedImages      map[string]docker_client.APIImages
 	networks        []docker_client.Network
 	pipeIDToexecID  map[string]string
 }
@@ -91,8 +93,10 @@ type Client interface {
 
 func newDockerClient(endpoint string) (Client, error) {
 	if endpoint == "" {
+		log.Info("docker from env")
 		return docker_client.NewClientFromEnv()
 	}
+	log.Info("docker from endpoint", endpoint)
 	return docker_client.NewClient(endpoint)
 }
 
@@ -119,6 +123,7 @@ func NewRegistry(options RegistryOptions) (Registry, error) {
 		containers:      radix.New(),
 		containersByPID: map[int]Container{},
 		images:          map[string]docker_client.APIImages{},
+		usedImages:      map[string]docker_client.APIImages{},
 		pipeIDToexecID:  map[string]string{},
 
 		client:                 client,
@@ -254,6 +259,7 @@ func (r *registry) reset() {
 	r.containers = radix.New()
 	r.containersByPID = map[int]Container{}
 	r.images = map[string]docker_client.APIImages{}
+	r.usedImages = map[string]docker_client.APIImages{}
 	r.networks = r.networks[:0]
 }
 
@@ -450,15 +456,29 @@ func (r *registry) GetContainerImage(id string) (docker_client.APIImages, bool) 
 func (r *registry) WalkImages(f func(docker_client.APIImages)) {
 	r.RLock()
 	defer r.RUnlock()
-
 	// Loop over containers so we only emit images for running containers.
 	r.containers.Walk(func(_ string, c interface{}) bool {
 		image, ok := r.images[c.(Container).Image()]
 		if ok {
+			r.usedImages[c.(Container).Image()] = image
 			f(image)
 		}
 		return false
 	})
+
+}
+
+// WalkUnusedImages Get all unused images
+func (r *registry) WalkUnusedImages(f func(docker_client.APIImages)) {
+	r.RLock()
+	defer r.RUnlock()
+	// Loop over containers so we only emit images for running containers.
+	for image, val := range r.images {
+		_, ok := r.usedImages[image]
+		if !ok {
+			f(val)
+		}
+	}
 }
 
 // WalkNetworks runs f on every network the registry knows of.

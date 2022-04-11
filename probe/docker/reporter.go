@@ -187,6 +187,7 @@ func (r *Reporter) Report() (report.Report, error) {
 	result := report.MakeReport()
 	result.Container = result.Container.Merge(r.containerTopology(localAddrs))
 	result.ContainerImage = result.ContainerImage.Merge(r.containerImageTopology())
+	result.UnusedImage = result.UnusedImage.Merge(r.unusedImageTopology())
 	result.Overlay = result.Overlay.Merge(r.overlayTopology())
 	result.SwarmService = result.SwarmService.Merge(r.swarmServiceTopology())
 	return result, nil
@@ -255,6 +256,7 @@ func (r *Reporter) containerTopology(localAddrs []net.IP) report.Topology {
 				continue
 			}
 			networkInfo, isInHostNamespace := networkInfo(id)
+
 			node = node.WithSets(networkInfo)
 			// Indicate whether the container is in the host network
 			// The container's NetworkMode is not enough due to
@@ -277,6 +279,32 @@ func (r *Reporter) containerImageTopology() report.Topology {
 		WithTableTemplates(ContainerImageTableTemplates)
 
 	r.registry.WalkImages(func(image docker_client.APIImages) {
+		imageID := trimImageID(image.ID)
+		latests := map[string]string{
+			ImageID:          imageID,
+			ImageSize:        humanize.Bytes(uint64(image.Size)),
+			ImageVirtualSize: humanize.Bytes(uint64(image.VirtualSize)),
+		}
+		if len(image.RepoTags) > 0 {
+			imageFullName := image.RepoTags[0]
+			latests[ImageName] = ImageNameWithoutTag(imageFullName)
+			latests[ImageTag] = ImageNameTag(imageFullName)
+		}
+		nodeID := report.MakeContainerImageNodeID(imageID)
+		node := report.MakeNodeWith(nodeID, latests)
+		node = node.AddPrefixPropertyList(ImageLabelPrefix, image.Labels)
+		result.AddNode(node)
+	})
+
+	return result
+}
+
+func (r *Reporter) unusedImageTopology() report.Topology {
+	result := report.MakeTopology().
+		WithMetadataTemplates(ContainerImageMetadataTemplates).
+		WithTableTemplates(ContainerImageTableTemplates)
+
+	r.registry.WalkUnusedImages(func(image docker_client.APIImages) {
 		imageID := trimImageID(image.ID)
 		latests := map[string]string{
 			ImageID:          imageID,

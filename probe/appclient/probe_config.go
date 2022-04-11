@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"github.com/weaveworks/common/user"
 	"io"
 	"net"
 	"net/http"
@@ -36,6 +37,7 @@ type ProbeConfig struct {
 	ProbeVersion string
 	ProbeID      string
 	Insecure     bool
+	Uid          string
 }
 
 func (pc ProbeConfig) authorizeHeaders(headers http.Header) {
@@ -44,6 +46,7 @@ func (pc ProbeConfig) authorizeHeaders(headers http.Header) {
 	} else {
 		headers.Set("Authorization", fmt.Sprintf("Scope-Probe token=%s", pc.Token))
 	}
+	headers.Set(user.OrgIDHeaderName, pc.Uid)
 	headers.Set(xfer.ScopeProbeIDHeader, pc.ProbeID)
 	headers.Set(xfer.ScopeProbeVersionHeader, pc.ProbeVersion)
 	headers.Set("user-agent", "Scope_Probe/"+pc.ProbeVersion)

@@ -282,6 +282,15 @@ func isPauseContainer(n report.Node, rpt report.Report) bool {
 
 // Tagger adds pod parents to container nodes.
 type Tagger struct {
+	hostNodeID string
+}
+
+// NewTagger tags each node with a foreign key linking it to its origin host
+// in the host topology.
+func NewTagger(hostID string) Tagger {
+	return Tagger{
+		hostNodeID: report.MakeHostNodeID(hostID),
+	}
 }
 
 // Name of this tagger, for metrics gathering
@@ -289,6 +298,15 @@ func (Tagger) Name() string { return "K8s" }
 
 // Tag adds pod parents to container nodes.
 func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
+	var (
+		metadata = map[string]string{report.HostId: r.hostNodeID}
+	)
+	for _, topology := range []report.Topology{rpt.Service, rpt.Deployment, rpt.DaemonSet, rpt.StatefulSet, rpt.CronJob, rpt.PersistentVolumeClaim, rpt.PersistentVolume, rpt.StorageClass, rpt.VolumeSnapshot, rpt.VolumeSnapshotData, rpt.Job, rpt.Namespace, rpt.Pod} {
+		for _, node := range topology.Nodes {
+			topology.ReplaceNode(node.WithLatests(metadata))
+		}
+	}
+
 	for id, n := range rpt.Container.Nodes {
 		uid, ok := n.Latest.Lookup(docker.LabelPrefix + "io.kubernetes.pod.uid")
 		if !ok {

@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"io"
 	"net"
 	"strconv"
@@ -374,6 +375,28 @@ func (c *container) getSanitizedCommand() string {
 	return result
 }
 
+type Mount struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Source      string `json:"source"`
+	Driver      string `json:"driver"`
+	Destination string `json:"destination"`
+	Mode        string `json:"mode"`
+	RW          bool   `json:"rw"`
+	Propagation string `json:"propagation"`
+}
+
+type NetworkSet struct {
+	Name       string `json:"name"`
+	Gateway    string `json:"gateway"`
+	Mode       string `json:"mode"`
+	IPv6       string `json:"ipv6"`
+	IPv4       string `json:"ipv4"`
+	NetworkID  string `json:"network_id"`
+	EndpointID string `json:"endpoint_id"`
+	Mac        string `json:"mac"`
+}
+
 func (c *container) getBaseNode() report.Node {
 	result := report.MakeNodeWith(report.MakeContainerNodeID(c.ID()), map[string]string{
 		ContainerID:       c.ID(),
@@ -382,11 +405,58 @@ func (c *container) getBaseNode() report.Node {
 		ImageID:           c.Image(),
 		ContainerHostname: c.Hostname(),
 	}).WithParent(report.ContainerImage, report.MakeContainerImageNodeID(c.Image()))
+	if len(c.container.Mounts) > 0 {
+		result = result.WithSets(c.makeMountSet())
+	}
+	if len(c.container.NetworkSettings.Networks) > 0 {
+		result = result.WithSets(c.makeNetworkSet())
+	}
 	result = result.AddPrefixPropertyList(LabelPrefix, c.container.Config.Labels)
 	if !c.noEnvironmentVariables {
 		result = result.AddPrefixPropertyList(EnvPrefix, c.env())
 	}
 	return result
+}
+
+func (c *container) makeMountSet() report.Sets {
+	var mountSlice []string
+	for _, mount := range c.container.Mounts {
+		mountStr, _ := jsoniter.MarshalToString(Mount{
+			Name:        mount.Name,
+			Type:        mount.Type,
+			Source:      mount.Source,
+			Driver:      mount.Driver,
+			Destination: mount.Destination,
+			Mode:        mount.Mode,
+			RW:          mount.RW,
+			Propagation: mount.Propagation,
+		})
+		mountSlice = append(mountSlice, mountStr)
+	}
+	return report.MakeSets().Add(report.Mount, report.MakeStringSet(mountSlice...))
+
+}
+
+func (c *container) makeNetworkSet() report.Sets {
+	var networkSlice []string
+
+	networkName := c.container.NetworkSettings.Bridge
+	for mode, network := range c.container.NetworkSettings.Networks {
+		networkStr, _ := jsoniter.MarshalToString(NetworkSet{
+			Name:       networkName,
+			Gateway:    network.Gateway,
+			Mode:       mode,
+			IPv6:       network.GlobalIPv6Address,
+			IPv4:       network.IPAddress,
+			NetworkID:  network.NetworkID,
+			EndpointID: network.EndpointID,
+			Mac:        network.MacAddress,
+		})
+		networkSlice = append(networkSlice, networkStr)
+	}
+
+	return report.MakeSets().Add(report.Network, report.MakeStringSet(networkSlice...))
+
 }
 
 // Return a slice including all controls that should be shown on this container

@@ -171,12 +171,11 @@ func (c *multiClient) Publish(r report.Report) error {
 		req.Header.Set("Content-Encoding", "gzip")
 		req.Header.Set("Content-Type", "application/msgpack")
 		client := &http.Client{}
-		resp, err := client.Do(req)
+		_, err := client.Do(req)
 		if err != nil {
 			log.Error("Send report to redirect error:", err)
 			return nil
 		}
-		log.Info("Send Report to redirect", "http://"+Redirect+":6789/api/redirect-report", resp)
 	}
 	errs := []string{}
 	for _, c := range c.clients {

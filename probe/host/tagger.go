@@ -14,6 +14,8 @@ type Tagger struct {
 // NewTagger tags each node with a foreign key linking it to its origin host
 // in the host topology.
 func NewTagger(hostID string) Tagger {
+	// NewRegistry returns a usable Registry. Don't forget to Stop it.
+
 	return Tagger{
 		hostNodeID: report.MakeHostNodeID(hostID),
 	}
@@ -25,16 +27,17 @@ func (Tagger) Name() string { return "Host" }
 // Tag implements Tagger.
 func (t Tagger) Tag(r report.Report) (report.Report, error) {
 	var (
-		metadata = map[string]string{report.HostNodeID: t.hostNodeID}
+		metadata = map[string]string{report.HostNodeID: t.hostNodeID, report.HostId: t.hostNodeID}
 	)
 
 	// Explicitly don't tag Endpoints, Addresses and Overlay nodes - These topologies include pseudo nodes,
 	// and as such do their own host tagging.
 	// Don't tag Pods so they can be reported centrally.
-	for _, topology := range []report.Topology{r.Process, r.Container, r.ContainerImage, r.Host} {
+	for _, topology := range []report.Topology{r.Process, r.Container, r.ContainerImage, r.UnusedImage, r.Host} {
 		for _, node := range topology.Nodes {
 			topology.ReplaceNode(node.WithLatests(metadata).WithParent(report.Host, t.hostNodeID))
 		}
 	}
+
 	return r, nil
 }

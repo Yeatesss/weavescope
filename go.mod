@@ -42,6 +42,7 @@ require (
 	github.com/imdario/mergo v0.3.5 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/iovisor/gobpf v0.0.0-20180826141936-4ece6c56f936 // indirect
+	github.com/json-iterator/go v1.1.9
 	github.com/k-sone/critbitgo v1.2.0
 	github.com/kr/pty v1.1.1
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
@@ -103,3 +104,5 @@ require (
 
 // Do not upgrade until https://github.com/fluent/fluent-logger-golang/issues/80 is fixed
 replace github.com/fluent/fluent-logger-golang => github.com/fluent/fluent-logger-golang v1.2.1
+
+replace github.com/fsouza/go-dockerclient v1.3.0 => ../go-dockerclient

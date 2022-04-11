@@ -105,6 +105,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 
 	if flags.hostId != "" {
 		hostId = flags.hostId
+
 	}
 	log.Infof("HostId has been acquired:" + hostId)
 
@@ -164,7 +165,8 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	var (
 		probeID  = strconv.FormatInt(rand.Int63(), 16)
 		hostName = hostname.Get()
-		hostID   = hostId // TODO(pb): we should sanitize the hostname
+		//hostID   = hostId // TODO(pb): we should sanitize the hostname
+		hostID = hostName + "_host_node_id" // TODO(pb): we should sanitize the hostname
 	)
 	log.Infof("probe starting, version %s, ID %s", version, probeID)
 	checkNewScopeVersion(flags)
@@ -186,6 +188,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 			Token:        token,
 			ProbeVersion: version,
 			ProbeID:      probeID,
+			Uid:          flags.userid,
 			Insecure:     flags.insecure,
 		}
 		return appclient.NewAppClient(
@@ -260,6 +263,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		hostReporter := host.NewReporter(hostID, hostName, probeID, version, clients, handlerRegistry)
 		defer hostReporter.Stop()
 		p.AddReporter(hostReporter)
+
 		p.AddTagger(host.NewTagger(hostID))
 
 		if flags.procEnabled {
@@ -344,7 +348,8 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	}
 
 	if flags.kubernetesEnabled {
-		p.AddTagger(&kubernetes.Tagger{})
+		tagger := kubernetes.NewTagger(hostID)
+		p.AddTagger(&tagger)
 	}
 
 	if flags.ecsEnabled {
@@ -377,6 +382,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 			handlerRegistry,
 			p,
 		)
+
 		if err != nil {
 			log.Errorf("plugins: problem loading: %v", err)
 		} else {

@@ -2,6 +2,7 @@ package appclient
 
 import (
 	"fmt"
+	"github.com/weaveworks/common/user"
 	"io"
 	"io/ioutil"
 	"net"
@@ -292,6 +293,7 @@ func (c *appClient) publish(r io.Reader) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set(user.OrgIDHeaderName, c.Uid)
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/msgpack")
 	// req.Header.Set("Content-Type", "application/binary") // TODO: we should use http.DetectContentType(..) on the gob'ed

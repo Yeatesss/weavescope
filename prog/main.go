@@ -4,6 +4,8 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
+	"github.com/weaveworks/common/user"
+	"github.com/weaveworks/scope/common/hostname"
 	"io/ioutil"
 	"net"
 	"os"
@@ -96,6 +98,7 @@ type flags struct {
 type probeFlags struct {
 	printOnStdout          bool
 	hostId                 string
+	userid                 string
 	basicAuth              bool
 	username               string
 	password               string
@@ -311,6 +314,7 @@ func setupFlags(flags *flags) {
 	flag.BoolVar(&flags.probe.noCommandLineArguments, "probe.omit.cmd-args", false, "Disable collection of command-line arguments")
 	flag.BoolVar(&flags.probe.noEnvironmentVariables, "probe.omit.env-vars", true, "Disable collection of environment variables")
 	flag.StringVar(&flags.probe.hostId, "probe.hostid", "", "Used to uniquely identify node")
+	flag.StringVar(&flags.probe.userid, "probe.userid", "", "Used to uniquely identify node")
 
 	flag.BoolVar(&flags.probe.insecure, "probe.insecure", false, "(SSL) explicitly allow \"insecure\" SSL connections and transfers")
 	flag.StringVar(&flags.probe.resolver, "probe.resolver", "", "IP address & port of resolver to use.  Default is to use system resolver.")
@@ -362,7 +366,7 @@ func setupFlags(flags *flags) {
 	flag.StringVar(&flags.probe.weaveHostname, "probe.weave.hostname", "", "Hostname to lookup in WeaveDNS")
 
 	// App flags
-	flag.DurationVar(&flags.app.window, "app.window", 15*time.Second, "window")
+	flag.DurationVar(&flags.app.window, "app.window", 200*time.Second, "window")
 	flag.IntVar(&flags.app.maxTopNodes, "app.max-topology-nodes", 10000, "drop topologies with more than this many nodes (0 to disable)")
 	flag.StringVar(&flags.app.listen, "app.http.address", ":"+strconv.Itoa(xfer.AppPort), "webserver listen address")
 	flag.DurationVar(&flags.app.stopTimeout, "app.stopTimeout", 5*time.Second, "How long to wait for http requests to finish when shutting down")
@@ -397,7 +401,7 @@ func setupFlags(flags *flags) {
 	flag.DurationVar(&flags.app.memcachedExpiration, "app.memcached.expiration", 2*15*time.Second, "How long reports stay in the memcache.")
 	flag.StringVar(&flags.app.memcachedService, "app.memcached.service", "memcached", "SRV service used to discover memcache servers.")
 	flag.IntVar(&flags.app.memcachedCompressionLevel, "app.memcached.compression", gzip.DefaultCompression, "How much to compress reports stored in memcached.")
-	flag.StringVar(&flags.app.userIDHeader, "app.userid.header", "", "HTTP header to use as userid")
+	flag.StringVar(&flags.app.userIDHeader, "app.userid.header", user.OrgIDHeaderName, "HTTP header to use as userid")
 	flag.BoolVar(&flags.app.externalUI, "app.externalUI", false, "Point to externally hosted static UI assets")
 	flag.StringVar(&flags.app.metricsGraphURL, "app.metrics-graph", "", "Enable extended metrics graph by providing a templated URL (supports :instanceID and :query). Example: --app.metrics-graph=/prom/:instanceID/notebook/new")
 	flag.StringVar(&flags.app.serviceName, "app.service-name", "app", "The name for this service which should be reported in instrumentation")
@@ -409,14 +413,19 @@ func setupFlags(flags *flags) {
 }
 
 func main() {
+
 	flags := flags{}
 	setupFlags(&flags)
 	flags.app.BillingEmitterConfig.RegisterFlags(flag.CommandLine)
 	flags.app.BillingClientConfig.RegisterFlags(flag.CommandLine)
 	flag.Parse()
-
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
+	flags.probe.userid = "2222222"
 
+	if strings.Index(hostname.Get(), "n0") >= 0 || strings.Index(hostname.Get(), "n1") >= 0 {
+		flags.probe.userid = "1111111"
+	}
+	fmt.Println("probe uid :", flags.probe.userid)
 	// Deal with common args
 	if flags.debug {
 		flags.probe.logLevel = "debug"
