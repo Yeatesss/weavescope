@@ -371,13 +371,17 @@ type VolumeDriverConfig struct {
 //
 // It has been added in the version 1.20 of the Docker API, available since
 // Docker 1.8.
+
 type Mount struct {
-	Name        string
+	Name string
+	Type        string
 	Source      string
+	Driver string
 	Destination string
-	Driver      string
 	Mode        string
 	RW          bool
+	Propagation string
+
 }
 
 // LogConfig defines the log driver type and the configuration for it.

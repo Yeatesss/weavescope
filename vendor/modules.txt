@@ -138,7 +138,7 @@ github.com/evanphx/json-patch
 github.com/fatih/camelcase
 # github.com/fluent/fluent-logger-golang v1.5.0 => github.com/fluent/fluent-logger-golang v1.2.1
 github.com/fluent/fluent-logger-golang/fluent
-# github.com/fsouza/go-dockerclient v1.3.0
+# github.com/fsouza/go-dockerclient v1.3.0 => ../go-dockerclient
 ## explicit
 github.com/fsouza/go-dockerclient
 github.com/fsouza/go-dockerclient/internal/archive
@@ -234,6 +234,7 @@ github.com/iovisor/gobpf/pkg/cpuonline
 # github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8
 github.com/jmespath/go-jmespath
 # github.com/json-iterator/go v1.1.9
+## explicit
 github.com/json-iterator/go
 # github.com/k-sone/critbitgo v1.2.0
 ## explicit
@@ -704,8 +705,8 @@ k8s.io/client-go/util/retry
 ## explicit
 k8s.io/klog
 # k8s.io/kube-openapi v0.0.0-20180108222231-a07b7bbb58e7
-k8s.io/kube-openapi/pkg/util/proto
 ## explicit
+k8s.io/kube-openapi/pkg/util/proto
 # k8s.io/kubernetes v1.13.0
 ## explicit
 k8s.io/kubernetes/pkg/kubectl/describe
