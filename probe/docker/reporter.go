@@ -1,8 +1,12 @@
 package docker
 
 import (
+	"crypto/md5"
+	"fmt"
+	"io"
 	"net"
 	"strings"
+	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	docker_client "github.com/fsouza/go-dockerclient"
@@ -15,9 +19,11 @@ import (
 const (
 	ImageID          = report.DockerImageID
 	ImageName        = report.DockerImageName
+	ImageNameReal    = report.DockerImageNameReal
 	ImageTag         = report.DockerImageTag
 	ImageSize        = report.DockerImageSize
 	ImageVirtualSize = report.DockerImageVirtualSize
+	ImageCreatedAt   = report.DockerImageCreatedAt
 	IsInHostNetwork  = report.DockerIsInHostNetwork
 	ImageLabelPrefix = report.DockerImageLabelPrefix
 	ImageTableID     = "image_table"
@@ -249,7 +255,6 @@ func (r *Reporter) containerTopology(localAddrs []net.IP) report.Topology {
 
 			return container.NetworkInfo(localAddrs), false
 		}
-
 		for _, node := range nodes {
 			id, ok := report.ParseContainerNodeID(node.ID)
 			if !ok {
@@ -272,7 +277,11 @@ func (r *Reporter) containerTopology(localAddrs []net.IP) report.Topology {
 
 	return result
 }
-
+func Md5(s string) string {
+	w := md5.New()
+	_, _ = io.WriteString(w, s)
+	return fmt.Sprintf("%x", w.Sum(nil))
+}
 func (r *Reporter) containerImageTopology() report.Topology {
 	result := report.MakeTopology().
 		WithMetadataTemplates(ContainerImageMetadataTemplates).
@@ -282,6 +291,7 @@ func (r *Reporter) containerImageTopology() report.Topology {
 		imageID := trimImageID(image.ID)
 		latests := map[string]string{
 			ImageID:          imageID,
+			ImageCreatedAt:   time.Unix(time.Now().Unix()-image.Created, 0).Format("2006-01-02 15:04:05"),
 			ImageSize:        humanize.Bytes(uint64(image.Size)),
 			ImageVirtualSize: humanize.Bytes(uint64(image.VirtualSize)),
 		}
@@ -289,8 +299,9 @@ func (r *Reporter) containerImageTopology() report.Topology {
 			imageFullName := image.RepoTags[0]
 			latests[ImageName] = ImageNameWithoutTag(imageFullName)
 			latests[ImageTag] = ImageNameTag(imageFullName)
+			latests[ImageNameReal] = strings.Replace(imageFullName, fmt.Sprintf(":"+latests[ImageTag]), "", -1)
 		}
-		nodeID := report.MakeContainerImageNodeID(imageID)
+		nodeID := report.MakeContainerImageNodeID(imageID + ":" + Md5(r.hostID))
 		node := report.MakeNodeWith(nodeID, latests)
 		node = node.AddPrefixPropertyList(ImageLabelPrefix, image.Labels)
 		result.AddNode(node)
@@ -308,6 +319,7 @@ func (r *Reporter) unusedImageTopology() report.Topology {
 		imageID := trimImageID(image.ID)
 		latests := map[string]string{
 			ImageID:          imageID,
+			ImageCreatedAt:   time.Unix(time.Now().Unix()-image.Created, 0).Format("2006-01-02 15:04:05"),
 			ImageSize:        humanize.Bytes(uint64(image.Size)),
 			ImageVirtualSize: humanize.Bytes(uint64(image.VirtualSize)),
 		}
@@ -315,8 +327,11 @@ func (r *Reporter) unusedImageTopology() report.Topology {
 			imageFullName := image.RepoTags[0]
 			latests[ImageName] = ImageNameWithoutTag(imageFullName)
 			latests[ImageTag] = ImageNameTag(imageFullName)
+			latests[ImageNameReal] = strings.Replace(imageFullName, fmt.Sprintf(":"+latests[ImageTag]), "", -1)
+
 		}
-		nodeID := report.MakeContainerImageNodeID(imageID)
+
+		nodeID := report.MakeContainerImageNodeID(imageID + ":" + Md5(r.hostID))
 		node := report.MakeNodeWith(nodeID, latests)
 		node = node.AddPrefixPropertyList(ImageLabelPrefix, image.Labels)
 		result.AddNode(node)

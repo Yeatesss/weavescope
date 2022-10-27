@@ -227,6 +227,7 @@ func (c *client) setupStore(resource string) cache.Store {
 	return store
 }
 
+//TODOOOOOOOOOOO
 func (c *client) clientAndType(resource string) (rest.Interface, interface{}, error) {
 	switch resource {
 	case "pods":
@@ -262,7 +263,7 @@ func (c *client) clientAndType(resource string) (rest.Interface, interface{}, er
 }
 
 // runReflectorUntil runs cache.Reflector#ListAndWatch in an endless loop, after checking that the resource is supported by kubernetes.
-// Errors are logged and retried with exponential backoff.
+// Errors are logged and retried with exponential backoff.获取k8s信息
 func (c *client) runReflectorUntil(resource string, store cache.Store) {
 	var r *cache.Reflector
 	listAndWatch := func() (bool, error) {

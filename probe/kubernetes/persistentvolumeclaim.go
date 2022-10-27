@@ -63,6 +63,7 @@ func (p *persistentVolumeClaim) GetNode(probeID string) report.Node {
 		NodeType:              "Persistent Volume Claim",
 		Status:                string(p.Status.Phase),
 		VolumeName:            p.Spec.VolumeName,
+		ClusterUUID:           ClusterUUIDStr,
 		StorageClassName:      p.GetStorageClass(),
 		report.ControlProbeID: probeID,
 	}

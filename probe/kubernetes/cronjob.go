@@ -65,6 +65,7 @@ func (cj *cronJob) Selectors() ([]labels.Selector, error) {
 func (cj *cronJob) GetNode(probeID string) report.Node {
 	latest := map[string]string{
 		NodeType:              "CronJob",
+		ClusterUUID:           ClusterUUIDStr,
 		Schedule:              cj.Spec.Schedule,
 		Suspended:             fmt.Sprint(cj.Spec.Suspend != nil && *cj.Spec.Suspend), // nil -> false
 		ActiveJobs:            fmt.Sprint(len(cj.jobs)),

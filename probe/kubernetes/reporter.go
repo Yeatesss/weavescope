@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"k8s.io/apimachinery/pkg/labels"
+	"os"
 
 	"github.com/weaveworks/common/mtime"
 	"github.com/weaveworks/scope/probe"
@@ -18,6 +19,7 @@ const (
 	DesiredReplicas    = report.KubernetesDesiredReplicas
 	NodeType           = report.KubernetesNodeType
 	Type               = report.KubernetesType
+	ClusterUUID        = report.KubernetesClusterUUID
 	Ports              = report.KubernetesPorts
 	VolumeClaim        = report.KubernetesVolumeClaim
 	StorageClassName   = report.KubernetesStorageClassName
@@ -299,6 +301,7 @@ func (Tagger) Name() string { return "K8s" }
 // Tag adds pod parents to container nodes.
 func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
 	var (
+		//TODO
 		metadata = map[string]string{report.HostId: r.hostNodeID}
 	)
 	for _, topology := range []report.Topology{rpt.Service, rpt.Deployment, rpt.DaemonSet, rpt.StatefulSet, rpt.CronJob, rpt.PersistentVolumeClaim, rpt.PersistentVolume, rpt.StorageClass, rpt.VolumeSnapshot, rpt.VolumeSnapshotData, rpt.Job, rpt.Namespace, rpt.Pod} {
@@ -323,8 +326,12 @@ func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
 	return rpt, nil
 }
 
+var ClusterUUIDStr string
+
 // Report generates a Report containing Container and ContainerImage topologies
 func (r *Reporter) Report() (report.Report, error) {
+	clusterUUIDByte, _ := os.ReadFile("/etc/cluster/uuid")
+	ClusterUUIDStr = string(clusterUUIDByte)
 	result := report.MakeReport()
 	serviceTopology, services, err := r.serviceTopology()
 	if err != nil {
@@ -738,10 +745,12 @@ func (r *Reporter) hostTopology() (report.Topology, error) {
 		} else {
 			activeControl = CordonNode
 		}
+
 		result.AddNode(
 			report.MakeNode(report.MakeHostNodeID(n.Name)).
 				WithTopology(report.Host).
-				WithLatestActiveControls(activeControl),
+				WithLatestActiveControls(activeControl).
+				WithLatest("cluster_uuid", mtime.Now(), ClusterUUIDStr),
 		)
 	}
 	return result, nil

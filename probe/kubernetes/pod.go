@@ -88,6 +88,7 @@ func (p *pod) VolumeClaimNames() []string {
 func (p *pod) GetNode(probeID string) report.Node {
 	latests := map[string]string{
 		State:                 p.State(),
+		ClusterUUID:           ClusterUUIDStr,
 		IP:                    p.Status.PodIP,
 		report.ControlProbeID: probeID,
 		RestartCount:          strconv.FormatUint(uint64(p.RestartCount()), 10),

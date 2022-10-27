@@ -3,7 +3,8 @@ package host
 import (
 	"fmt"
 	docker_client "github.com/fsouza/go-dockerclient"
-	log "github.com/sirupsen/logrus"
+	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -21,6 +22,7 @@ const (
 	DockerGoVersion  = report.DockerGoVersion
 	DockerDriver     = report.DockerDriver
 	DockerRootDir    = report.DockerRootDir
+	HostMasterIP     = report.HostMasterIP
 	Timestamp        = report.Timestamp
 	HostName         = report.HostName
 	LocalNetworks    = report.HostLocalNetworks
@@ -32,6 +34,8 @@ const (
 	MemoryUsage      = report.HostMemoryUsage
 	ScopeVersion     = report.ScopeVersion
 )
+
+var CollectorAddress string
 
 // Exposed for testing.
 const (
@@ -120,6 +124,7 @@ var GetLocalNetworks = report.GetLocalNetworks
 func (r *Reporter) Report() (report.Report, error) {
 	var (
 		rep           = report.MakeReport()
+		ip            string
 		localCIDRs    []string
 		dockerVersion string
 		dockerDrive   string
@@ -159,8 +164,6 @@ func (r *Reporter) Report() (report.Report, error) {
 	if r.dockerClient != nil {
 		env, e := r.dockerClient.Version()
 		if e == nil && env != nil && env.Exists("Version") {
-			log.Info("docker:", env)
-
 			dockerVersion = env.Get("Version")
 			apiVersion = env.Get("ApiVersion")
 			goVersion = env.Get("GoVersion")
@@ -172,11 +175,18 @@ func (r *Reporter) Report() (report.Report, error) {
 		}
 
 	}
-
+	uuid, _ := os.ReadFile("/etc/cluster/uuid")
+	if CollectorAddress != "" {
+		i, e := GetOutboundIP(CollectorAddress)
+		if e == nil {
+			ip = i.String()
+		}
+	}
 	rep.Host.AddNode(
 		report.MakeNodeWith(report.MakeHostNodeID(r.hostID), map[string]string{
 			DockerVersion:         dockerVersion,
 			DockerApiVersion:      apiVersion,
+			HostMasterIP:          ip,
 			DockerDriver:          dockerDrive,
 			DockerRootDir:         dockerRootDir,
 			DockerGoVersion:       goVersion,
@@ -192,6 +202,7 @@ func (r *Reporter) Report() (report.Report, error) {
 				Add(LocalNetworks, report.MakeStringSet(localCIDRs...)),
 			).
 			WithMetrics(metrics).
+			WithLatest("cluster_uuid", mtime.Now(), string(uuid)).
 			WithLatestActiveControls(ExecHost),
 	)
 
@@ -207,4 +218,14 @@ func (r *Reporter) Report() (report.Report, error) {
 // Stop stops the reporter.
 func (r *Reporter) Stop() {
 	r.deregisterControls()
+}
+
+func GetOutboundIP(address string) (net.IP, error) {
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		return []byte{}, err
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.TCPAddr)
+	return localAddr.IP, nil
 }

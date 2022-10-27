@@ -54,6 +54,7 @@ func (p *volumeSnapshot) GetNode(probeID string) report.Node {
 		report.ControlProbeID: probeID,
 		NodeType:              "Volume Snapshot",
 		VolumeClaim:           p.GetVolumeName(),
+		ClusterUUID:           ClusterUUIDStr,
 		SnapshotData:          p.Spec.SnapshotDataName,
 		VolumeName:            p.GetLabels()[SnapshotPVName],
 	}).WithLatestActiveControls(CloneVolumeSnapshot, DeleteVolumeSnapshot, Describe)

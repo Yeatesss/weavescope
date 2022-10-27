@@ -27,6 +27,7 @@ func (p *volumeSnapshotData) GetNode(probeID string) report.Node {
 	return p.MetaNode(report.MakeVolumeSnapshotDataNodeID(p.UID())).WithLatests(map[string]string{
 		report.ControlProbeID: probeID,
 		NodeType:              "Volume Snapshot Data",
+		ClusterUUID:           ClusterUUIDStr,
 		VolumeName:            p.Spec.PersistentVolumeRef.Name,
 		VolumeSnapshotName:    p.Spec.VolumeSnapshotRef.Name,
 	}).WithLatestActiveControls(Describe)

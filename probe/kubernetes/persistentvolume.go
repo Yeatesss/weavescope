@@ -1,10 +1,9 @@
 package kubernetes
 
 import (
-	"reflect"
-
 	"github.com/weaveworks/scope/report"
 	apiv1 "k8s.io/api/core/v1"
+	"reflect"
 )
 
 // PersistentVolume represent kubernetes PersistentVolume interface
@@ -72,8 +71,8 @@ func (p *persistentVolume) GetNode(probeID string) report.Node {
 		Status:                string(p.Status.Phase),
 		AccessModes:           p.GetAccessMode(),
 		report.ControlProbeID: probeID,
+		ClusterUUID:           ClusterUUIDStr,
 	}
-
 	if p.GetStorageDriver() != "" {
 		latests[StorageDriver] = p.GetStorageDriver()
 	}

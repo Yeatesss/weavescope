@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/weaveworks/common/user"
-	"github.com/weaveworks/scope/common/hostname"
 	"io/ioutil"
 	"net"
 	"os"
@@ -142,10 +141,10 @@ type probeFlags struct {
 	ecsCacheSize     int
 	ecsCacheExpiry   time.Duration
 	ecsClusterRegion string
-
-	weaveEnabled  bool
-	weaveAddr     string
-	weaveHostname string
+	collectorAddress string
+	weaveEnabled     bool
+	weaveAddr        string
+	weaveHostname    string
 }
 
 type appFlags struct {
@@ -366,7 +365,7 @@ func setupFlags(flags *flags) {
 	flag.StringVar(&flags.probe.weaveHostname, "probe.weave.hostname", "", "Hostname to lookup in WeaveDNS")
 
 	// App flags
-	flag.DurationVar(&flags.app.window, "app.window", 200*time.Second, "window")
+	flag.DurationVar(&flags.app.window, "app.window", 15*time.Second, "window")
 	flag.IntVar(&flags.app.maxTopNodes, "app.max-topology-nodes", 10000, "drop topologies with more than this many nodes (0 to disable)")
 	flag.StringVar(&flags.app.listen, "app.http.address", ":"+strconv.Itoa(xfer.AppPort), "webserver listen address")
 	flag.DurationVar(&flags.app.stopTimeout, "app.stopTimeout", 5*time.Second, "How long to wait for http requests to finish when shutting down")
@@ -420,12 +419,12 @@ func main() {
 	flags.app.BillingClientConfig.RegisterFlags(flag.CommandLine)
 	flag.Parse()
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
-	flags.probe.userid = "2222222"
-
-	if strings.Index(hostname.Get(), "n0") >= 0 || strings.Index(hostname.Get(), "n1") >= 0 {
-		flags.probe.userid = "1111111"
-	}
-	fmt.Println("probe uid :", flags.probe.userid)
+	//flags.probe.userid = "2222222"
+	//
+	//if strings.Index(hostname.Get(), "n0") >= 0 || strings.Index(hostname.Get(), "n1") >= 0 {
+	//	flags.probe.userid = "1111111"
+	//}
+	//fmt.Println("probe uid :", flags.probe.userid)
 	// Deal with common args
 	if flags.debug {
 		flags.probe.logLevel = "debug"
@@ -473,13 +472,14 @@ func main() {
 		if !flags.dryRun {
 			log.Infof("publishing to: %s", strings.Join(args, ", "))
 		}
+		if len(args) > 0 {
+			host.CollectorAddress = args[0]
+		}
 		targets, err = appclient.ParseTargets(args)
 		if err != nil {
 			log.Fatalf("Invalid targets: %v", err)
 		}
 	}
-
-	appclient.Redirect = os.Getenv("MY_NODE_IP")
 
 	// Node name may be set by environment variable, e.g. from the Kubernetes downward API
 	if flags.probe.kubernetesNodeName == "" {

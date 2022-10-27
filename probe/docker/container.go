@@ -492,6 +492,7 @@ func (c *container) GetNode() report.Node {
 	}
 
 	result := c.baseNode.WithLatests(latest)
+	result = result.WithSets(c.makeNetworkSet())
 	result = result.WithLatestActiveControls(c.controls()...)
 	result = result.WithMetrics(c.metrics())
 	return result

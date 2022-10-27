@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"fmt"
-
 	"github.com/weaveworks/scope/report"
 
 	apiv1 "k8s.io/api/core/v1"
@@ -51,6 +50,7 @@ func (s *service) GetNode(probeID string) report.Node {
 	latest := map[string]string{
 		IP:                    s.Spec.ClusterIP,
 		Type:                  string(s.Spec.Type),
+		ClusterUUID:           ClusterUUIDStr,
 		report.ControlProbeID: probeID,
 	}
 	if s.Spec.LoadBalancerIP != "" {

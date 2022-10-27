@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/pborman/uuid"
 	"github.com/tylerb/graceful"
 	"math/rand"
 	"net"
@@ -148,6 +149,10 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	case kubernetesRoleHost:
 		flags.kubernetesEnabled = true
 	case kubernetesRoleCluster:
+		//cluster agent need redirect
+		appclient.Redirect = os.Getenv("MY_NODE_IP")
+		fmt.Println("probe node ip:", appclient.Redirect)
+
 		flags.kubernetesEnabled = true
 		flags.spyProcs = false
 		flags.procEnabled = false
@@ -160,13 +165,15 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	if flags.spyProcs && os.Getegid() != 0 {
 		log.Warn("--probe.proc.spy=true, but that requires root to find everything")
 	}
-
+	if _, err := os.Stat("/etc/monitor/hostnodeid"); os.IsNotExist(err) {
+		os.WriteFile("/etc/monitor/hostnodeid", []byte(uuid.New()), 0777)
+	}
+	uuid, _ := os.ReadFile("/etc/monitor/hostnodeid")
 	rand.Seed(time.Now().UnixNano())
 	var (
 		probeID  = strconv.FormatInt(rand.Int63(), 16)
 		hostName = hostname.Get()
-		//hostID   = hostId // TODO(pb): we should sanitize the hostname
-		hostID = hostName + "_host_node_id" // TODO(pb): we should sanitize the hostname
+		hostID   = hostname.Get() + ":" + string(uuid) // TODO(pb): we should sanitize the hostname
 	)
 	log.Infof("probe starting, version %s, ID %s", version, probeID)
 	checkNewScopeVersion(flags)
@@ -333,6 +340,8 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	}
 
 	if flags.kubernetesEnabled && flags.kubernetesRole != kubernetesRoleHost {
+		hostID = hostname.Get()
+
 		if client, err := kubernetes.NewClient(flags.kubernetesClientConfig); err == nil {
 			defer client.Stop()
 			reporter := kubernetes.NewReporter(client, clients, probeID, hostID, p, handlerRegistry, flags.kubernetesNodeName)
@@ -392,9 +401,9 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	}
 
 	maybeExportProfileData(flags)
+	go httpServer(clients)
 
 	p.Start()
-	go httpServer(clients)
 
 	signals.SignalHandlerLoop(
 		logging.Logrus(log.StandardLogger()),

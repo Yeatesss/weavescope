@@ -39,6 +39,7 @@ func (j *job) Selector() (labels.Selector, error) {
 func (j *job) GetNode(probeID string) report.Node {
 	latests := map[string]string{
 		NodeType:              "Job",
+		ClusterUUID:           ClusterUUIDStr,
 		report.ControlProbeID: probeID,
 	}
 	return j.MetaNode(report.MakeJobNodeID(j.UID())).

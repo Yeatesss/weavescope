@@ -172,12 +172,15 @@ func (c *multiClient) Publish(r report.Report) error {
 		req.Header.Set("Content-Type", "application/msgpack")
 		client := &http.Client{}
 		_, err := client.Do(req)
+
 		if err != nil {
 			log.Error("Send report to redirect error:", err)
 			return nil
 		}
+		return nil
 	}
 	errs := []string{}
+
 	for _, c := range c.clients {
 		if err := c.Publish(bytes.NewReader(buf.Bytes()), r.Shortcut); err != nil {
 			errs = append(errs, err.Error())

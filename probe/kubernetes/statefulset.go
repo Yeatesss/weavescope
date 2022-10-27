@@ -46,6 +46,7 @@ func (s *statefulSet) GetNode(probeID string) report.Node {
 	latests := map[string]string{
 		NodeType:              "StatefulSet",
 		DesiredReplicas:       fmt.Sprint(desiredReplicas),
+		ClusterUUID:           ClusterUUIDStr,
 		Replicas:              fmt.Sprint(s.Status.Replicas),
 		report.ControlProbeID: probeID,
 		ObservedGeneration:    fmt.Sprint(s.Status.ObservedGeneration),

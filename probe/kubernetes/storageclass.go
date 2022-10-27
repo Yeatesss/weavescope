@@ -27,6 +27,7 @@ func (p *storageClass) GetNode(probeID string) report.Node {
 	return p.MetaNode(report.MakeStorageClassNodeID(p.UID())).WithLatests(map[string]string{
 		NodeType:              "Storage Class",
 		Name:                  p.GetName(),
+		ClusterUUID:           ClusterUUIDStr,
 		Provisioner:           p.Provisioner,
 		report.ControlProbeID: probeID,
 	}).WithLatestActiveControls(Describe)
