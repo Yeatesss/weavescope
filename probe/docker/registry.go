@@ -1,6 +1,10 @@
 package docker
 
 import (
+	"fmt"
+	jsoniter "github.com/json-iterator/go"
+	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -281,10 +285,9 @@ func (r *registry) updateImages() error {
 	if err != nil {
 		return err
 	}
-
 	r.Lock()
 	defer r.Unlock()
-
+	r.images = make(map[string]docker_client.APIImages)
 	for _, image := range images {
 		r.images[trimImageID(image.ID)] = image
 	}
@@ -456,10 +459,26 @@ func (r *registry) GetContainerImage(id string) (docker_client.APIImages, bool) 
 func (r *registry) WalkImages(f func(docker_client.APIImages)) {
 	r.RLock()
 	defer r.RUnlock()
+	fl, err := os.OpenFile(fmt.Sprintf("%d-image.log", time.Now().Hour()), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return
+	}
+	defer fl.Close()
+	os.Remove(fmt.Sprintf("%d-image.log", time.Now().Add(-1*time.Hour).Hour()))
+	io.WriteString(fl, "full_images\n")
+
+	for _, image := range r.images {
+		a, _ := jsoniter.MarshalToString(image.RepoTags)
+		io.WriteString(fl, fmt.Sprintf("%s:%s\n", image.ID, a))
+
+	}
 	// Loop over containers so we only emit images for running containers.
 	r.containers.Walk(func(_ string, c interface{}) bool {
 		image, ok := r.images[c.(Container).Image()]
 		if ok {
+			a, _ := jsoniter.MarshalToString(image.RepoTags)
+			io.WriteString(fl, fmt.Sprintf("useimage:%s:%s\n", image.ID, a))
+
 			r.usedImages[c.(Container).Image()] = image
 			f(image)
 		}
@@ -476,6 +495,9 @@ func (r *registry) WalkUnusedImages(f func(docker_client.APIImages)) {
 	for image, val := range r.images {
 		_, ok := r.usedImages[image]
 		if !ok {
+			a, _ := jsoniter.MarshalToString(val.RepoTags)
+			wlog(fmt.Sprintf("unseimage:%s:%s\n", val.ID, a))
+
 			f(val)
 		}
 	}
@@ -489,4 +511,14 @@ func (r *registry) WalkNetworks(f func(docker_client.Network)) {
 	for _, network := range r.networks {
 		f(network)
 	}
+}
+
+func wlog(data string) {
+	fl, err := os.OpenFile(fmt.Sprintf("%d-image.log", time.Now().Hour()), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return
+	}
+	defer fl.Close()
+	io.WriteString(fl, data)
+
 }

@@ -325,6 +325,11 @@ func (r *Reporter) unusedImageTopology() report.Topology {
 		}
 		if len(image.RepoTags) > 0 {
 			imageFullName := image.RepoTags[0]
+			for _, repoTag := range image.RepoTags {
+				if len(imageFullName) > len(repoTag) {
+					imageFullName = repoTag
+				}
+			}
 			latests[ImageName] = ImageNameWithoutTag(imageFullName)
 			latests[ImageTag] = ImageNameTag(imageFullName)
 			latests[ImageNameReal] = strings.Replace(imageFullName, fmt.Sprintf(":"+latests[ImageTag]), "", -1)
