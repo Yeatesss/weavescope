@@ -51,7 +51,9 @@ const (
 	DockerContainerUptime        = "docker_container_uptime"
 	DockerContainerRestartCount  = "docker_container_restart_count"
 	DockerContainerNetworkMode   = "docker_container_network_mode"
-	DockerEnvPrefix              = "docker_env_"
+	DockerClusterUUID            = "cluster_uuid"
+
+	DockerEnvPrefix = "docker_env_"
 	// probe/kubernetes
 	KubernetesName                 = "kubernetes_name"
 	KubernetesNamespace            = "kubernetes_namespace"
@@ -73,6 +75,7 @@ const (
 	KubernetesState                = "kubernetes_state"
 	KubernetesIsInHostNetwork      = "kubernetes_is_in_host_network"
 	KubernetesRestartCount         = "kubernetes_restart_count"
+	KubernetesHostIP               = "kubernetes_host_ip"
 	KubernetesMisscheduledReplicas = "kubernetes_misscheduled_replicas"
 	KubernetesPublicIP             = "kubernetes_public_ip"
 	KubernetesSchedule             = "kubernetes_schedule"

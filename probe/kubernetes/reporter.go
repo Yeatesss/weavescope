@@ -1,14 +1,12 @@
 package kubernetes
 
 import (
-	"k8s.io/apimachinery/pkg/labels"
-	"os"
-
 	"github.com/weaveworks/common/mtime"
 	"github.com/weaveworks/scope/probe"
 	"github.com/weaveworks/scope/probe/controls"
 	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/report"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // These constants are keys used in node metadata
@@ -330,8 +328,6 @@ var ClusterUUIDStr string
 
 // Report generates a Report containing Container and ContainerImage topologies
 func (r *Reporter) Report() (report.Report, error) {
-	clusterUUIDByte, _ := os.ReadFile("/etc/cluster/uuid")
-	ClusterUUIDStr = string(clusterUUIDByte)
 	result := report.MakeReport()
 	serviceTopology, services, err := r.serviceTopology()
 	if err != nil {

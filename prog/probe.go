@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/gorilla/mux"
-	"github.com/pborman/uuid"
+	uuid2 "github.com/pborman/uuid"
 	"github.com/tylerb/graceful"
 	"math/rand"
 	"net"
@@ -99,7 +99,10 @@ func maybeExportProfileData(flags probeFlags) {
 
 // Main runs the probe
 func probeMain(flags probeFlags, targets []appclient.Target) {
-	var hostId = os.Getenv("PROBE_HOSTID")
+	var (
+		hostId = os.Getenv("PROBE_HOSTID")
+		uuid   []byte
+	)
 	setLogLevel(flags.logLevel)
 	setLogFormatter(flags.logPrefix)
 	log.Infof("HostId being acquired ...")
@@ -165,10 +168,18 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	if flags.spyProcs && os.Getegid() != 0 {
 		log.Warn("--probe.proc.spy=true, but that requires root to find everything")
 	}
+
 	if _, err := os.Stat("/etc/monitor/hostnodeid"); os.IsNotExist(err) {
-		os.WriteFile("/etc/monitor/hostnodeid", []byte(uuid.New()), 0777)
+		uuid = []byte(uuid2.New())
+		os.WriteFile("/etc/monitor/hostnodeid", uuid, 0777)
+	} else {
+		uuid, _ = os.ReadFile("/etc/monitor/hostnodeid")
 	}
-	uuid, _ := os.ReadFile("/etc/monitor/hostnodeid")
+	clusterUUIDByte, _ := os.ReadFile("/etc/cluster/uuid")
+	kubernetes.ClusterUUIDStr = string(clusterUUIDByte)
+	docker.ClusterUUIDStr = string(clusterUUIDByte)
+	os.WriteFile("/etc/monitor/clusteruuid", []byte("uuid="+kubernetes.ClusterUUIDStr), 0777)
+
 	rand.Seed(time.Now().UnixNano())
 	var (
 		probeID  = strconv.FormatInt(rand.Int63(), 16)
@@ -272,7 +283,6 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		p.AddReporter(hostReporter)
 
 		p.AddTagger(host.NewTagger(hostID))
-
 		if flags.procEnabled {
 			processCache = process.NewCachingWalker(process.NewWalker(flags.procRoot, false))
 			p.AddTicker(processCache)
