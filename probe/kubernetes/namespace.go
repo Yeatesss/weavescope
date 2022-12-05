@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"github.com/weaveworks/scope/report"
+	"github.com/weaveworks/scope/tools/vars"
 	apiv1 "k8s.io/api/core/v1"
 )
 
@@ -24,7 +25,7 @@ func NewNamespace(ns *apiv1.Namespace) NamespaceResource {
 
 func (ns *namespace) GetNode() report.Node {
 	latests := map[string]string{
-		ClusterUUID: ClusterUUIDStr,
+		ClusterUUID: vars.ClusterUUID,
 	}
 	return ns.MetaNode(report.MakeNamespaceNodeID(ns.UID())).WithLatests(latests)
 }

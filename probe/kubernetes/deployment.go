@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"fmt"
 	"github.com/weaveworks/scope/report"
+	"github.com/weaveworks/scope/tools/vars"
 
 	apiappsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
@@ -58,7 +59,7 @@ func (d *deployment) GetNode(probeID string) report.Node {
 		AvailableReplicas:     fmt.Sprint(d.Status.AvailableReplicas),
 		UnavailableReplicas:   fmt.Sprint(d.Status.UnavailableReplicas),
 		Strategy:              string(d.Spec.Strategy.Type),
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 		report.ControlProbeID: probeID,
 		NodeType:              "Deployment",
 	}).WithLatestActiveControls(ScaleUp, ScaleDown, Describe)

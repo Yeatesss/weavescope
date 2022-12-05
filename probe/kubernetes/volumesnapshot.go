@@ -3,6 +3,7 @@ package kubernetes
 import (
 	snapshotv1 "github.com/openebs/k8s-snapshot-client/snapshot/pkg/apis/volumesnapshot/v1"
 	"github.com/weaveworks/scope/report"
+	"github.com/weaveworks/scope/tools/vars"
 )
 
 // SnapshotPVName is the label key which provides PV name
@@ -54,7 +55,7 @@ func (p *volumeSnapshot) GetNode(probeID string) report.Node {
 		report.ControlProbeID: probeID,
 		NodeType:              "Volume Snapshot",
 		VolumeClaim:           p.GetVolumeName(),
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 		SnapshotData:          p.Spec.SnapshotDataName,
 		VolumeName:            p.GetLabels()[SnapshotPVName],
 	}).WithLatestActiveControls(CloneVolumeSnapshot, DeleteVolumeSnapshot, Describe)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"context"
@@ -12,14 +13,28 @@ import (
 // Raw report handler
 func makeRawReportHandler(rep Reporter) CtxHandlerFunc {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+		//only := r.URL.Query().Get("only")
+
 		timestamp := deserializeTimestamp(r.URL.Query().Get("timestamp"))
 		rawReport, err := rep.Report(ctx, timestamp)
 		if err != nil {
 			respondWith(ctx, w, http.StatusInternalServerError, err)
 			return
 		}
+		if removes := r.URL.Query().Get("remove"); removes != "" {
+			removeSlice := strings.Split(removes, ",")
+			Remove(&rawReport, removeSlice)
+		}
 		censorCfg := report.GetCensorConfigFromRequest(r)
 		respondWithReport(ctx, w, r, report.CensorRawReport(rawReport, censorCfg))
+	}
+}
+func Remove(rpt *report.Report, rms []string) {
+	for _, r := range rms {
+		switch r {
+		case "endpoint":
+			rpt.Endpoint.Nodes = make(report.Nodes)
+		}
 	}
 }
 

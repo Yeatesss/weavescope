@@ -3,6 +3,7 @@ package docker
 import (
 	"crypto/md5"
 	"fmt"
+	"github.com/weaveworks/scope/tools/vars"
 	"io"
 	"net"
 	"strings"
@@ -32,8 +33,6 @@ const (
 	StackNamespace   = report.DockerStackNamespace
 	DefaultNamespace = report.DockerDefaultNamespace
 )
-
-var ClusterUUIDStr string
 
 // Exposed for testing
 var (
@@ -224,7 +223,7 @@ func (r *Reporter) containerTopology(localAddrs []net.IP) report.Topology {
 		WithTableTemplates(ContainerTableTemplates)
 	result.Controls.AddControls(ContainerControls)
 
-	metadata := map[string]string{report.ControlProbeID: r.probeID, report.DockerClusterUUID: ClusterUUIDStr}
+	metadata := map[string]string{report.ControlProbeID: r.probeID, report.DockerClusterUUID: vars.ClusterUUID}
 	nodes := []report.Node{}
 	r.registry.WalkContainers(func(c Container) {
 		nodes = append(nodes, c.GetNode().WithLatests(metadata))
@@ -297,7 +296,7 @@ func (r *Reporter) containerImageTopology() report.Topology {
 			ImageCreatedAt:   time.Unix(time.Now().Unix()-image.Created, 0).Format("2006-01-02 15:04:05"),
 			ImageSize:        humanize.Bytes(uint64(image.Size)),
 			ImageVirtualSize: humanize.Bytes(uint64(image.VirtualSize)),
-			ClusterUUID:      ClusterUUIDStr,
+			ClusterUUID:      vars.ClusterUUID,
 		}
 		if len(image.RepoTags) > 0 {
 			imageFullName := image.RepoTags[0]
@@ -326,7 +325,7 @@ func (r *Reporter) unusedImageTopology() report.Topology {
 			ImageCreatedAt:   time.Unix(time.Now().Unix()-image.Created, 0).Format("2006-01-02 15:04:05"),
 			ImageSize:        humanize.Bytes(uint64(image.Size)),
 			ImageVirtualSize: humanize.Bytes(uint64(image.VirtualSize)),
-			ClusterUUID:      ClusterUUIDStr,
+			ClusterUUID:      vars.ClusterUUID,
 		}
 		if len(image.RepoTags) > 0 {
 			imageFullName := image.RepoTags[0]

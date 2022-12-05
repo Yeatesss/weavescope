@@ -6,6 +6,7 @@ import (
 	"github.com/weaveworks/scope/probe/controls"
 	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/report"
+	"github.com/weaveworks/scope/tools/vars"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
@@ -323,8 +324,6 @@ func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
 	}
 	return rpt, nil
 }
-
-var ClusterUUIDStr string
 
 // Report generates a Report containing Container and ContainerImage topologies
 func (r *Reporter) Report() (report.Report, error) {
@@ -746,7 +745,7 @@ func (r *Reporter) hostTopology() (report.Topology, error) {
 			report.MakeNode(report.MakeHostNodeID(n.Name)).
 				WithTopology(report.Host).
 				WithLatestActiveControls(activeControl).
-				WithLatest("cluster_uuid", mtime.Now(), ClusterUUIDStr),
+				WithLatest("cluster_uuid", mtime.Now(), vars.ClusterUUID),
 		)
 	}
 	return result, nil

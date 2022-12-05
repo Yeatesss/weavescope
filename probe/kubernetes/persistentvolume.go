@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"github.com/weaveworks/scope/report"
+	"github.com/weaveworks/scope/tools/vars"
 	apiv1 "k8s.io/api/core/v1"
 	"reflect"
 )
@@ -71,7 +72,7 @@ func (p *persistentVolume) GetNode(probeID string) report.Node {
 		Status:                string(p.Status.Phase),
 		AccessModes:           p.GetAccessMode(),
 		report.ControlProbeID: probeID,
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 	}
 	if p.GetStorageDriver() != "" {
 		latests[StorageDriver] = p.GetStorageDriver()

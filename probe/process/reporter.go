@@ -1,6 +1,7 @@
 package process
 
 import (
+	"github.com/weaveworks/scope/tools/vars"
 	"strconv"
 
 	"github.com/weaveworks/common/mtime"
@@ -11,6 +12,7 @@ import (
 const (
 	PID            = report.PID
 	Name           = report.Name
+	ClusterUUID    = "cluster_uuid"
 	PPID           = report.PPID
 	Cmdline        = report.Cmdline
 	Threads        = report.Threads
@@ -85,6 +87,7 @@ func (r *Reporter) processTopology() (report.Topology, error) {
 		nodeID := report.MakeProcessNodeID(r.scope, pidstr)
 		node := report.MakeNode(nodeID)
 		node = node.WithLatest(PID, now, pidstr)
+		node = node.WithLatest(ClusterUUID, now, vars.ClusterUUID)
 		node = node.WithLatest(Threads, now, strconv.Itoa(p.Threads))
 		if p.Name != "" {
 			node = node.WithLatest(Name, now, p.Name)

@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"github.com/weaveworks/scope/report"
+	"github.com/weaveworks/scope/tools/vars"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -63,7 +64,7 @@ func (p *persistentVolumeClaim) GetNode(probeID string) report.Node {
 		NodeType:              "Persistent Volume Claim",
 		Status:                string(p.Status.Phase),
 		VolumeName:            p.Spec.VolumeName,
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 		StorageClassName:      p.GetStorageClass(),
 		report.ControlProbeID: probeID,
 	}

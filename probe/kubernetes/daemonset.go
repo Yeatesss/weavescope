@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"fmt"
+	"github.com/weaveworks/scope/tools/vars"
 	apiv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -47,7 +48,7 @@ func (d *daemonSet) GetNode(probeID string) report.Node {
 		DesiredReplicas:       fmt.Sprint(d.Status.DesiredNumberScheduled),
 		Replicas:              fmt.Sprint(d.Status.CurrentNumberScheduled),
 		MisscheduledReplicas:  fmt.Sprint(d.Status.NumberMisscheduled),
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 		NodeType:              "DaemonSet",
 		report.ControlProbeID: probeID,
 	}).WithLatestActiveControls(Describe)

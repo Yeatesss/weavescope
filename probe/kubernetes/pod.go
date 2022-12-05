@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"github.com/weaveworks/scope/tools/vars"
 	"strconv"
 	"strings"
 
@@ -89,7 +90,7 @@ func (p *pod) VolumeClaimNames() []string {
 func (p *pod) GetNode(probeID string) report.Node {
 	latests := map[string]string{
 		State:                 p.State(),
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 		IP:                    p.Status.PodIP,
 		report.ControlProbeID: probeID,
 		RestartCount:          strconv.FormatUint(uint64(p.RestartCount()), 10),

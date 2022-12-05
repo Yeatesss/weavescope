@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/mux"
 	uuid2 "github.com/pborman/uuid"
 	"github.com/tylerb/graceful"
+	"github.com/weaveworks/scope/tools/vars"
 	"math/rand"
 	"net"
 	"net/http"
@@ -176,9 +177,8 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		uuid, _ = os.ReadFile("/etc/monitor/hostnodeid")
 	}
 	clusterUUIDByte, _ := os.ReadFile("/etc/cluster/uuid")
-	kubernetes.ClusterUUIDStr = string(clusterUUIDByte)
-	docker.ClusterUUIDStr = string(clusterUUIDByte)
-	os.WriteFile("/etc/monitor/clusteruuid", []byte("uuid="+kubernetes.ClusterUUIDStr), 0777)
+	vars.ClusterUUID = string(clusterUUIDByte)
+	os.WriteFile("/etc/monitor/clusteruuid", []byte("uuid="+vars.ClusterUUID), 0777)
 
 	rand.Seed(time.Now().UnixNano())
 	var (

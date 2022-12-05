@@ -14,10 +14,10 @@ type Topology struct {
 	Label             string            `json:"label,omitempty"`
 	LabelPlural       string            `json:"label_plural,omitempty"`
 	Nodes             Nodes             `json:"nodes,omitempty" deepequal:"nil==empty"`
-	Controls          Controls          `json:"controls,omitempty" deepequal:"nil==empty"`
-	MetadataTemplates MetadataTemplates `json:"metadata_templates,omitempty"`
-	MetricTemplates   MetricTemplates   `json:"metric_templates,omitempty"`
-	TableTemplates    TableTemplates    `json:"table_templates,omitempty"`
+	Controls          Controls          `json:"-"`
+	MetadataTemplates MetadataTemplates `json:"-"`
+	MetricTemplates   MetricTemplates   `json:"-"`
+	TableTemplates    TableTemplates    `json:"-"`
 }
 
 // MakeTopology gives you a Topology.

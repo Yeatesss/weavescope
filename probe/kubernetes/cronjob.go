@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"fmt"
+	"github.com/weaveworks/scope/tools/vars"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -65,7 +66,7 @@ func (cj *cronJob) Selectors() ([]labels.Selector, error) {
 func (cj *cronJob) GetNode(probeID string) report.Node {
 	latest := map[string]string{
 		NodeType:              "CronJob",
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 		Schedule:              cj.Spec.Schedule,
 		Suspended:             fmt.Sprint(cj.Spec.Suspend != nil && *cj.Spec.Suspend), // nil -> false
 		ActiveJobs:            fmt.Sprint(len(cj.jobs)),

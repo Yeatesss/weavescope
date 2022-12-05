@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"fmt"
+	"github.com/weaveworks/scope/tools/vars"
 
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,7 +47,7 @@ func (s *statefulSet) GetNode(probeID string) report.Node {
 	latests := map[string]string{
 		NodeType:              "StatefulSet",
 		DesiredReplicas:       fmt.Sprint(desiredReplicas),
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 		Replicas:              fmt.Sprint(s.Status.Replicas),
 		report.ControlProbeID: probeID,
 		ObservedGeneration:    fmt.Sprint(s.Status.ObservedGeneration),

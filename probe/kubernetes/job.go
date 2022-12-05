@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"github.com/weaveworks/scope/tools/vars"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -39,7 +40,7 @@ func (j *job) Selector() (labels.Selector, error) {
 func (j *job) GetNode(probeID string) report.Node {
 	latests := map[string]string{
 		NodeType:              "Job",
-		ClusterUUID:           ClusterUUIDStr,
+		ClusterUUID:           vars.ClusterUUID,
 		report.ControlProbeID: probeID,
 	}
 	return j.MetaNode(report.MakeJobNodeID(j.UID())).
