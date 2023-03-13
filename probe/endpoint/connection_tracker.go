@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package endpoint
@@ -44,11 +45,11 @@ func newConnectionTracker(conf ReporterConfig) connectionTracker {
 }
 
 func flowToTuple(f conntrack.Conn) (ft fourTuple) {
-	if f.Orig.Dst.Equal(f.Reply.Src) {
-		return makeFourTuple(f.Orig.Src, f.Orig.Dst, uint16(f.Orig.SrcPort), uint16(f.Orig.DstPort))
-	}
+	//if f.Orig.Dst.Equal(f.Reply.Src) {
+	return makeFourTuple(f.Orig.Src, f.Orig.Dst, uint16(f.Orig.SrcPort), uint16(f.Orig.DstPort))
+	//}
 	// Handle DNAT-ed connections in the initial state
-	return makeFourTuple(f.Orig.Dst, f.Orig.Src, uint16(f.Orig.DstPort), uint16(f.Orig.SrcPort))
+	//return makeFourTuple(f.Orig.Dst, f.Orig.Src, uint16(f.Orig.DstPort), uint16(f.Orig.SrcPort))
 }
 
 func (t *connectionTracker) useProcfs() {

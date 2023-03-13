@@ -169,8 +169,9 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	if flags.spyProcs && os.Getegid() != 0 {
 		log.Warn("--probe.proc.spy=true, but that requires root to find everything")
 	}
-
-	if _, err := os.Stat("/etc/monitor/hostnodeid"); os.IsNotExist(err) {
+	_, err = os.Stat("/etc/monitor/hostnodeid")
+	fmt.Println("hostnodeid:", err, os.IsNotExist(err))
+	if os.IsNotExist(err) {
 		uuid = []byte(uuid2.New())
 		os.WriteFile("/etc/monitor/hostnodeid", uuid, 0777)
 	} else {

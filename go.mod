@@ -61,6 +61,7 @@ require (
 	github.com/peterbourgon/runsvinit v2.0.0+incompatible
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v1.5.0
+	github.com/pyroscope-io/client v0.6.0
 	github.com/richo/GOSHOUT v0.0.0-20210103052837-9a2e452d4c18
 	github.com/russross/blackfriday v0.0.0-20151020174500-a18a46c9b943 // indirect
 	github.com/shurcooL/sanitized_anchor_name v0.0.0-20150822220530-244f5ac324cb // indirect

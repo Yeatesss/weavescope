@@ -419,6 +419,8 @@ func main() {
 	flags.app.BillingClientConfig.RegisterFlags(flag.CommandLine)
 	flag.Parse()
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
+	fmt.Println("Host IP:", os.Getenv("HOST_IP"))
+	fmt.Println("Control Collection Addr:", os.Getenv("RESOURCE_COLLECTION_ADDR"))
 	//flags.probe.userid = "2222222"
 	//
 	//if strings.Index(hostname.Get(), "n0") >= 0 || strings.Index(hostname.Get(), "n1") >= 0 {
@@ -468,6 +470,10 @@ func main() {
 			// since it leads to problems in exotic DNS setups
 			args = append(args, fmt.Sprintf("127.0.0.1:%s", port))
 		}
+		if addr := os.Getenv("RESOURCE_COLLECTION_ADDR"); addr != "" {
+			host.CollectorAddress = addr
+			args = append(args, addr)
+		}
 		args = append(args, flag.Args()...)
 		if !flags.dryRun {
 			log.Infof("publishing to: %s", strings.Join(args, ", "))
@@ -475,12 +481,14 @@ func main() {
 		if len(args) > 0 {
 			host.CollectorAddress = args[0]
 		}
+
 		targets, err = appclient.ParseTargets(args)
 		if err != nil {
 			log.Fatalf("Invalid targets: %v", err)
 		}
-	}
+		fmt.Println("Target:", args)
 
+	}
 	// Node name may be set by environment variable, e.g. from the Kubernetes downward API
 	if flags.probe.kubernetesNodeName == "" {
 		flags.probe.kubernetesNodeName = os.Getenv("KUBERNETES_NODENAME")

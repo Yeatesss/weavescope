@@ -272,6 +272,7 @@ func (n *Nodes) UnsafeMerge(other Nodes) {
 
 // UnsafeUnMerge removes nodes from n that would be added by merging other,
 // modifying the original.
+//遍历当前扫描结果，如果上次完整结果包含当前的扫描结果，且数据一样，删掉n,部分数据相同则将相同数据设置成默认值，且不删除，如果都不相同则都不变更删除
 func (n *Nodes) UnsafeUnMerge(other Nodes) {
 	for k, node := range *n {
 		if otherNode, ok := (other)[k]; ok {

@@ -472,6 +472,7 @@ func (r *registry) WalkImages(f func(docker_client.APIImages)) {
 		io.WriteString(fl, fmt.Sprintf("%s:%s\n", image.ID, a))
 
 	}
+	r.usedImages = make(map[string]docker_client.APIImages)
 	// Loop over containers so we only emit images for running containers.
 	r.containers.Walk(func(_ string, c interface{}) bool {
 		image, ok := r.images[c.(Container).Image()]

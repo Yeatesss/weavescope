@@ -176,12 +176,15 @@ func (r *Reporter) Report() (report.Report, error) {
 
 	}
 	uuid, _ := os.ReadFile("/etc/cluster/uuid")
-	if CollectorAddress != "" {
+	if hostIP := os.Getenv("HOST_IP"); hostIP != "" {
+		ip = hostIP
+	} else if CollectorAddress != "" {
 		i, e := GetOutboundIP(CollectorAddress)
 		if e == nil {
 			ip = i.String()
 		}
 	}
+
 	rep.Host.AddNode(
 		report.MakeNodeWith(report.MakeHostNodeID(r.hostID), map[string]string{
 			DockerVersion:         dockerVersion,
