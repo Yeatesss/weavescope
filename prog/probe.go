@@ -154,7 +154,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		flags.kubernetesEnabled = true
 	case kubernetesRoleCluster:
 		//cluster agent need redirect
-		appclient.Redirect = os.Getenv("MY_NODE_IP")
+		//appclient.Redirect = os.Getenv("MY_NODE_IP")
 		fmt.Println("probe node ip:", appclient.Redirect)
 
 		flags.kubernetesEnabled = true
