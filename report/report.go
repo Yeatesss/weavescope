@@ -352,6 +352,25 @@ func (r Report) Copy() Report {
 	})
 	return newReport
 }
+func (r Report) RetentionElements(elements ...string) Report {
+	var rpt = Report{
+		TS:       r.TS,
+		DNS:      r.DNS,
+		BugDNS:   r.BugDNS,
+		Sampling: r.Sampling,
+		Window:   r.Window,
+		Shortcut: r.Shortcut,
+		Plugins:  r.Plugins,
+		ID:       r.ID,
+	}
+	for _, element := range elements {
+		switch element {
+		case "host":
+			rpt.Host = r.Host
+		}
+	}
+	return rpt
+}
 
 // UnsafeMerge merges another Report into the receiver. The original is modified.
 func (r *Report) UnsafeMerge(other Report) {

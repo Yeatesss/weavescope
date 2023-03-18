@@ -3,8 +3,10 @@ package app
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,11 +25,64 @@ import (
 
 var (
 	// Version - set at buildtime.
-	Version = "dev"
-
+	Version                                                                                                            = "dev"
+	LimitNode         int64                                                                                            = -2 //-2：未设置 -1:无限制 >=0:限制
+	AutoAuthorize     bool                                                                                                  //-2：未设置 -1:无限制 >=0:限制
+	AuthorizeNodeList = &AuthorizeNode{Lock: sync.RWMutex{}, Nodes: make(map[string]struct{}), NodesSlice: []string{}}      //已授权节点列表
 	// UniqueID - set at runtime.
 	UniqueID = "0"
 )
+
+const (
+	LimitUnSet int64 = -2
+	LimitZero  int64 = 0
+	UnLimit    int64 = -1
+)
+
+type AuthorizeNode struct {
+	Lock       sync.RWMutex
+	Nodes      map[string]struct{}
+	NodesSlice []string
+}
+
+func (l *AuthorizeNode) Exists(key string) bool {
+	l.Lock.RLock()
+	defer l.Lock.RUnlock()
+	_, ok := l.Nodes[key]
+	return ok
+}
+func (l *AuthorizeNode) Set(key string) {
+	l.Lock.Lock()
+	defer l.Lock.Unlock()
+	l.Nodes[key] = struct{}{}
+	l.NodesSlice = append(l.NodesSlice, key)
+	return
+}
+func (l *AuthorizeNode) Del() {
+	l.Lock.Lock()
+	defer l.Lock.Unlock()
+	randIndex := rand.Intn(len(l.NodesSlice))
+	delete(l.Nodes, l.NodesSlice[randIndex])
+	l.NodesSlice = append(l.NodesSlice[:randIndex], l.NodesSlice[randIndex+1:]...)
+	return
+}
+func (l *AuthorizeNode) Len() (length int) {
+	l.Lock.RLock()
+	defer l.Lock.RUnlock()
+	return len(l.Nodes)
+}
+
+type ControRes struct {
+	Success bool      `json:"success"`
+	Code    int       `json:"code"`
+	Message string    `json:"message"`
+	Data    NodeLimit `json:"data"`
+}
+type NodeLimit struct {
+	AutoAuthorize bool     `json:"auto_authorize"`
+	Limit         int64    `json:"limit"`
+	Nodes         []string `json:"nodes"`
+}
 
 // contextKey is a wrapper type for use in context.WithValue() to satisfy golint
 // https://github.com/golang/go/issues/17293
@@ -107,8 +162,25 @@ func RegisterTopologyRoutes(router *mux.Router, r Reporter, capabilities map[str
 		Name("api_topology_topology_id")
 	get.Handle("/api/report",
 		gzipHandler(requestContextDecorator(makeRawReportHandler(r))))
+	get.Handle("/api/node/authorize",
+		gzipHandler(requestContextDecorator(nodeAuthorizeHandler())))
 	get.Handle("/api/probes",
 		gzipHandler(requestContextDecorator(makeProbeHandler(r))))
+}
+
+//Output the current node authorization
+func nodeAuthorizeHandler() CtxHandlerFunc {
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+		respondWith(ctx, w, http.StatusOK, struct {
+			AutoAuthorize bool     `json:"auto_authorize"`
+			LimitNode     int64    `json:"limit_node"`
+			Nodes         []string `json:"nodes"`
+		}{
+			AutoAuthorize: AutoAuthorize,
+			LimitNode:     LimitNode,
+			Nodes:         AuthorizeNodeList.NodesSlice,
+		})
+	}
 }
 
 // RegisterReportPostHandler registers the handler for report submission
@@ -116,8 +188,9 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 	post := router.Methods("POST").Subrouter()
 	post.HandleFunc("/api/report", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 		var (
-			buf    = &bytes.Buffer{}
-			reader = io.TeeReader(r.Body, buf)
+			buf             = &bytes.Buffer{}
+			hasUnAuthorized = false
+			reader          = io.TeeReader(r.Body, buf)
 		)
 
 		gzipped := strings.Contains(r.Header.Get("Content-Encoding"), "gzip")
@@ -147,12 +220,71 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 		if !isMsgpack {
 			buf, _ = rpt.WriteBinary()
 		}
+		switch LimitNode {
+		case LimitUnSet:
+			log.Errorf("Error not getting node restrictions")
+			w.WriteHeader(http.StatusOK)
+			return
+		default:
+			if res := int(LimitNode) - AuthorizeNodeList.Len(); res < 0 && AuthorizeNodeList.Len() > 0 {
+				//当前节点数量大于限制节点数量，则将主动丢弃节点保证数量正确，正常情况下授权数量缩减导致
+				for ; res < 0; res++ {
+					AuthorizeNodeList.Del()
+				}
+			}
+			for key, node := range rpt.Host.Nodes {
+				if activeControls, ok := node.Latest.Lookup("active_controls"); ok && activeControls == "host_exec" && key != "" {
+					//处理节点授权信息
+					if AuthorizeNodeList.Exists(key) {
+						//授权列表存在即授权
+						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "1")
+						continue
+					}
+					if !AutoAuthorize {
+						//未开启自动授权
+						hasUnAuthorized = true
+						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "0")
+						continue
+					}
+					if LimitNode == UnLimit || int(LimitNode) > AuthorizeNodeList.Len() {
+						//不限制或者未达到限制上线，则进行授权
+						AuthorizeNodeList.Set(key)
+						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "1")
+					} else {
+						//未授权
+						hasUnAuthorized = true
+						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "0")
+					}
+				}
 
+			}
+		}
+		if hasUnAuthorized {
+			tmpRpt := rpt.RetentionElements("host")
+			rpt = &tmpRpt
+		}
 		if err := a.Add(ctx, *rpt, buf.Bytes()); err != nil {
 			log.Errorf("Error Adding report: %v", err)
 			respondWith(ctx, w, http.StatusInternalServerError, err)
 			return
 		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	post.HandleFunc("/api/node/limit", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+		var (
+			resp = NodeLimit{}
+		)
+		log.Info("Received node limit request")
+		if err := json.NewDecoder(r.Body).Decode(&resp); err != nil {
+			respondWith(ctx, w, http.StatusInternalServerError, err)
+			return
+		}
+		LimitNode = resp.Limit
+		AutoAuthorize = resp.AutoAuthorize
+		for _, rp := range resp.Nodes {
+			AuthorizeNodeList.Set(rp)
+		}
+		log.Info("Node limit response: ", LimitNode, AutoAuthorize, AuthorizeNodeList.Len())
 		w.WriteHeader(http.StatusOK)
 	}))
 }

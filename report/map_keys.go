@@ -39,6 +39,7 @@ const (
 	DockerAttachContainer        = "docker_attach_container"
 	DockerExecContainer          = "docker_exec_container"
 	DockerContainerName          = "docker_container_name"
+	DockerPrivileged             = "privileged_container"
 	DockerContainerCommand       = "docker_container_command"
 	DockerContainerPorts         = "docker_container_ports"
 	DockerContainerCreated       = "docker_container_created"

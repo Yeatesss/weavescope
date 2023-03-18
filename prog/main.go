@@ -158,6 +158,7 @@ type appFlags struct {
 	logHTTPHeaders bool
 
 	basicAuth        bool
+	controlHost      string
 	username         string
 	password         string
 	passwordFilename string
@@ -375,6 +376,7 @@ func setupFlags(flags *flags) {
 	flag.BoolVar(&flags.app.logHTTPHeaders, "app.log.httpHeaders", false, "Log HTTP headers. Needs app.log.http to be enabled.")
 
 	flag.BoolVar(&flags.app.basicAuth, "app.basicAuth", false, "Enable basic authentication for app")
+	flag.StringVar(&flags.app.controlHost, "app.controlHost", "gateway.cnapp.svc.cluster.local.:18080", "control host")
 	flag.StringVar(&flags.app.username, "app.basicAuth.username", "admin", "Username for basic authentication")
 	flag.StringVar(&flags.app.password, "app.basicAuth.password", "admin", "Password for basic authentication")
 	flag.StringVar(&flags.app.passwordFilename, "app.basicAuth.password.filename", "", "Password filename for basic authentication. It overwrites app.basicAuth.password")

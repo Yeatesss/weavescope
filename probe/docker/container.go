@@ -19,6 +19,7 @@ import (
 
 // These constants are keys used in node metadata
 const (
+	ContainerPrivileged    = report.DockerPrivileged
 	ContainerName          = report.DockerContainerName
 	ContainerCommand       = report.DockerContainerCommand
 	ContainerPorts         = report.DockerContainerPorts
@@ -471,15 +472,18 @@ func (c *container) controls() []string {
 	}
 }
 
+var boolToString = map[bool]string{true: "1", false: "0"}
+
 func (c *container) GetNode() report.Node {
 	c.RLock()
 	defer c.RUnlock()
 	latest := map[string]string{
+		ContainerPrivileged: boolToString[c.container.HostConfig.Privileged],
 		ContainerName:       strings.TrimPrefix(c.container.Name, "/"),
 		ContainerState:      c.StateString(),
 		ContainerStateHuman: c.State(),
 	}
-
+	//	c.container.HostConfig.Privileged
 	if !c.container.State.Paused && c.container.State.Running {
 		uptimeSeconds := int(mtime.Now().Sub(c.container.State.StartedAt) / time.Second)
 		networkMode := ""

@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -333,7 +335,10 @@ func appMain(flags appFlags) {
 	} else {
 		log.Infof("Basic authentication disabled")
 	}
-
+	err = setNodeLimit(flags.controlHost)
+	if err != nil {
+		log.Errorf("Error setting node limit: %v", err)
+	}
 	server := &graceful.Server{
 		// we want to manage the stop condition ourselves below
 		NoSignalHandling: true,
@@ -389,4 +394,27 @@ func newWeavePublisher(dockerEndpoint, weaveAddr, weaveHostname, containerName s
 		weaveHostname,
 		containerName,
 	), nil
+}
+
+func setNodeLimit(host string) (err error) {
+	var (
+		resp      *http.Response
+		res       []byte
+		controRes = app.ControRes{}
+	)
+	//resp, err = http.Get("weave-scope.cnapp.svc.cluster.local.:18080/api/authorization/node/limit")
+	resp, err = http.Get("http://" + host + "/api/authorization/node/limit")
+	if err != nil {
+		return
+	}
+	res, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	_ = jsoniter.Unmarshal(res, &controRes)
+	app.LimitNode = controRes.Data.Limit
+	app.AutoAuthorize = controRes.Data.AutoAuthorize
+	for _, rp := range controRes.Data.Nodes {
+		app.AuthorizeNodeList.Set(rp)
+	}
+	log.Infof("Node limit: %d,Auth authorize:%v,Node list length:%v", app.LimitNode, app.AutoAuthorize, app.AuthorizeNodeList.Len())
+	return
 }
