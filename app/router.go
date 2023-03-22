@@ -235,7 +235,7 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 			for key, node := range rpt.Host.Nodes {
 				if activeControls, ok := node.Latest.Lookup("active_controls"); ok && activeControls == "host_exec" && key != "" {
 					//处理节点授权信息
-					if AuthorizeNodeList.Exists(key) {
+					if AuthorizeNodeList.Exists(key) || LimitNode == UnLimit {
 						//授权列表存在即授权
 						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "1")
 						continue
@@ -246,7 +246,7 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "0")
 						continue
 					}
-					if LimitNode == UnLimit || int(LimitNode) > AuthorizeNodeList.Len() {
+					if int(LimitNode) > AuthorizeNodeList.Len() {
 						//不限制或者未达到限制上线，则进行授权
 						AuthorizeNodeList.Set(key)
 						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "1")
