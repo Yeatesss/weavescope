@@ -104,6 +104,8 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		hostId = os.Getenv("PROBE_HOSTID")
 		uuid   []byte
 	)
+	fmt.Println("Control Collection Addr:", os.Getenv("RESOURCE_COLLECTION_ADDR"))
+
 	setLogLevel(flags.logLevel)
 	setLogFormatter(flags.logPrefix)
 	log.Infof("HostId being acquired ...")

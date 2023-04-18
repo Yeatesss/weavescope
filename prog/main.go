@@ -148,6 +148,7 @@ type probeFlags struct {
 }
 
 type appFlags struct {
+	identity       string
 	window         time.Duration
 	maxTopNodes    int
 	listen         string
@@ -366,6 +367,7 @@ func setupFlags(flags *flags) {
 	flag.StringVar(&flags.probe.weaveHostname, "probe.weave.hostname", "", "Hostname to lookup in WeaveDNS")
 
 	// App flags
+	flag.StringVar(&flags.app.identity, "app.identity", "master", "Identity of the current collector: master|slave")
 	flag.DurationVar(&flags.app.window, "app.window", 15*time.Second, "window")
 	flag.IntVar(&flags.app.maxTopNodes, "app.max-topology-nodes", 10000, "drop topologies with more than this many nodes (0 to disable)")
 	flag.StringVar(&flags.app.listen, "app.http.address", ":"+strconv.Itoa(xfer.AppPort), "webserver listen address")
@@ -376,7 +378,7 @@ func setupFlags(flags *flags) {
 	flag.BoolVar(&flags.app.logHTTPHeaders, "app.log.httpHeaders", false, "Log HTTP headers. Needs app.log.http to be enabled.")
 
 	flag.BoolVar(&flags.app.basicAuth, "app.basicAuth", false, "Enable basic authentication for app")
-	flag.StringVar(&flags.app.controlHost, "app.controlHost", "gateway.cnapp.svc.cluster.local.:18080", "control host")
+	flag.StringVar(&flags.app.controlHost, "app.controlHost", "", "control host")
 	flag.StringVar(&flags.app.username, "app.basicAuth.username", "admin", "Username for basic authentication")
 	flag.StringVar(&flags.app.password, "app.basicAuth.password", "admin", "Password for basic authentication")
 	flag.StringVar(&flags.app.passwordFilename, "app.basicAuth.password.filename", "", "Password filename for basic authentication. It overwrites app.basicAuth.password")
@@ -422,7 +424,6 @@ func main() {
 	flag.Parse()
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
 	fmt.Println("Host IP:", os.Getenv("HOST_IP"))
-	fmt.Println("Control Collection Addr:", os.Getenv("RESOURCE_COLLECTION_ADDR"))
 	//flags.probe.userid = "2222222"
 	//
 	//if strings.Index(hostname.Get(), "n0") >= 0 || strings.Index(hostname.Get(), "n1") >= 0 {
@@ -489,8 +490,8 @@ func main() {
 			log.Fatalf("Invalid targets: %v", err)
 		}
 		fmt.Println("Target:", args)
-
 	}
+
 	// Node name may be set by environment variable, e.g. from the Kubernetes downward API
 	if flags.probe.kubernetesNodeName == "" {
 		flags.probe.kubernetesNodeName = os.Getenv("KUBERNETES_NODENAME")
@@ -519,6 +520,9 @@ func main() {
 	if passwordFilename != "" {
 		flags.probe.passwordFilename = passwordFilename
 		flags.app.passwordFilename = passwordFilename
+	}
+	if flags.app.controlHost == "" {
+		flags.app.controlHost = os.Getenv("CONTROL_HOST")
 	}
 
 	flags.probe.password = getPassword(flags.probe.password, flags.probe.passwordFilename)

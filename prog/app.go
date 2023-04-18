@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"net/url"
+	"os"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -220,13 +222,39 @@ func pipeRouterFactory(userIDer multitenant.UserIDer, pipeRouterURL, consulInf s
 
 	return nil, fmt.Errorf("Invalid pipe router '%s'", pipeRouterURL)
 }
+func initLimitFromMasterCollector() {
+	fmt.Println("Initializing limit from master collector")
+	addr := os.Getenv("RESOURCE_COLLECTION_ADDR")
+	fmt.Println(addr + "/api/node/authorize")
+	resp, err := http.Get(addr + "/api/node/authorize")
+	if err == nil && resp.StatusCode == 200 {
+		var tmpLimit app.NodeLimit
+		body, _ := io.ReadAll(resp.Body)
+		_ = jsoniter.Unmarshal(body, &tmpLimit)
+		app.SetNodeLimit(tmpLimit)
+	} else {
+		fmt.Println("Failed to initialize limit from master collector", err)
+	}
+}
 
 // Main runs the app
 func appMain(flags appFlags) {
 	setLogLevel(flags.logLevel)
 	setLogFormatter(flags.logPrefix)
 	runtime.SetBlockProfileRate(flags.blockProfileRate)
-
+	app.CollectorappIdentity = flags.identity
+	fmt.Println("Control host:", flags.controlHost)
+	go app.DelayInit()
+	switch app.CollectorappIdentity {
+	case "master":
+		var err error
+		err = setNodeLimit(flags.controlHost)
+		if err != nil {
+			log.Errorf("Error setting node limit: %v", err)
+		}
+	case "slave":
+		initLimitFromMasterCollector()
+	}
 	registerAppMetricsOnce.Do(registerAppMetrics)
 
 	traceCloser, err := tracing.NewFromEnv(fmt.Sprintf("scope-%s", flags.serviceName))
@@ -335,10 +363,7 @@ func appMain(flags appFlags) {
 	} else {
 		log.Infof("Basic authentication disabled")
 	}
-	err = setNodeLimit(flags.controlHost)
-	if err != nil {
-		log.Errorf("Error setting node limit: %v", err)
-	}
+
 	server := &graceful.Server{
 		// we want to manage the stop condition ourselves below
 		NoSignalHandling: true,
@@ -403,7 +428,7 @@ func setNodeLimit(host string) (err error) {
 		controRes = app.ControRes{}
 	)
 	//resp, err = http.Get("weave-scope.cnapp.svc.cluster.local.:18080/api/authorization/node/limit")
-	resp, err = http.Get("http://" + host + "/api/authorization/node/limit")
+	resp, err = http.Get(host + "/api/authorization/node/limit")
 	if err != nil {
 		return
 	}
@@ -412,9 +437,14 @@ func setNodeLimit(host string) (err error) {
 	_ = jsoniter.Unmarshal(res, &controRes)
 	app.LimitNode = controRes.Data.Limit
 	app.AutoAuthorize = controRes.Data.AutoAuthorize
-	for _, rp := range controRes.Data.Nodes {
-		app.AuthorizeNodeList.Set(rp)
+	if controRes.Success {
+		for _, rp := range controRes.Data.Nodes {
+			app.AuthorizeNodeList.Set(rp)
+		}
+		log.Infof("Node limit: %d,Auth authorize:%v,Node list length:%v", app.LimitNode, app.AutoAuthorize, app.AuthorizeNodeList.Len())
+	} else {
+		log.Errorf("Fetch node limit fail:", controRes.Message)
 	}
-	log.Infof("Node limit: %d,Auth authorize:%v,Node list length:%v", app.LimitNode, app.AutoAuthorize, app.AuthorizeNodeList.Len())
+
 	return
 }
