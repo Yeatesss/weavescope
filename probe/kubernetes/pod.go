@@ -16,6 +16,7 @@ const (
 	IsInHostNetwork = report.KubernetesIsInHostNetwork
 	RestartCount    = report.KubernetesRestartCount
 	HostIP          = report.KubernetesHostIP
+	NodeName        = report.KubernetesHostName
 )
 
 // Pod represents a Kubernetes pod
@@ -95,6 +96,7 @@ func (p *pod) GetNode(probeID string) report.Node {
 		report.ControlProbeID: probeID,
 		RestartCount:          strconv.FormatUint(uint64(p.RestartCount()), 10),
 		HostIP:                p.Status.HostIP,
+		NodeName:              p.Spec.NodeName,
 	}
 
 	if len(p.VolumeClaimNames()) > 0 {
