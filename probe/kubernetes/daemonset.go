@@ -46,7 +46,7 @@ func (d *daemonSet) Selector() (labels.Selector, error) {
 func (d *daemonSet) GetNode(probeID string) report.Node {
 	return d.MetaNode(report.MakeDaemonSetNodeID(d.UID())).WithLatests(map[string]string{
 		DesiredReplicas:       fmt.Sprint(d.Status.DesiredNumberScheduled),
-		Replicas:              fmt.Sprint(d.Status.CurrentNumberScheduled),
+		Replicas:              fmt.Sprint(d.Status.NumberReady),
 		MisscheduledReplicas:  fmt.Sprint(d.Status.NumberMisscheduled),
 		ClusterUUID:           vars.ClusterUUID,
 		NodeType:              "DaemonSet",

@@ -48,7 +48,7 @@ func (s *statefulSet) GetNode(probeID string) report.Node {
 		NodeType:              "StatefulSet",
 		DesiredReplicas:       fmt.Sprint(desiredReplicas),
 		ClusterUUID:           vars.ClusterUUID,
-		Replicas:              fmt.Sprint(s.Status.Replicas),
+		Replicas:              fmt.Sprint(s.Status.ReadyReplicas),
 		report.ControlProbeID: probeID,
 		ObservedGeneration:    fmt.Sprint(s.Status.ObservedGeneration),
 	}
