@@ -5,9 +5,8 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
+	"github.com/weaveworks/scope/app/httpclient"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -27,89 +26,10 @@ import (
 var (
 	// Version - set at buildtime.
 	CollectorappIdentity string
-	pushSlaveSignal                                                                                                       = make(chan int64, 100)
-	Version                                                                                                               = "dev"
-	LimitNode            int64                                                                                            = -2 //-2：未设置 -1:无限制 >=0:限制
-	AutoAuthorize        bool                                                                                                  //-2：未设置 -1:无限制 >=0:限制
-	AuthorizeNodeList    = &AuthorizeNode{Lock: sync.RWMutex{}, Nodes: make(map[string]struct{}), NodesSlice: []string{}}      //已授权节点列表
-	SlaveCollectors      = &SlaveCollector{Lock: sync.RWMutex{}, Collectors: make(map[string]struct{})}                        //已授权节点列表
+	Version              = "dev"
 	// UniqueID - set at runtime.
 	UniqueID = "0"
 )
-
-const (
-	LimitUnSet int64 = -2
-	LimitZero  int64 = 0
-	UnLimit    int64 = -1
-)
-
-type AuthorizeNode struct {
-	Lock       sync.RWMutex
-	Nodes      map[string]struct{}
-	NodesSlice []string
-}
-
-func (l *AuthorizeNode) Exists(key string) bool {
-	l.Lock.RLock()
-	defer l.Lock.RUnlock()
-	_, ok := l.Nodes[key]
-	return ok
-}
-func (l *AuthorizeNode) Init(nodes []string) {
-	l.Lock.Lock()
-	defer l.Lock.Unlock()
-	l.Nodes = make(map[string]struct{})
-	l.NodesSlice = []string{}
-	for _, node := range nodes {
-		l.Nodes[node] = struct{}{}
-		l.NodesSlice = append(l.NodesSlice, node)
-	}
-	if CollectorappIdentity == "master" {
-		pushSlaveSignal <- 1
-
-	}
-	return
-}
-func (l *AuthorizeNode) Set(key string) {
-	l.Lock.Lock()
-	defer l.Lock.Unlock()
-	l.Nodes[key] = struct{}{}
-	l.NodesSlice = append(l.NodesSlice, key)
-	if CollectorappIdentity == "master" {
-		pushSlaveSignal <- 1
-
-	}
-	return
-}
-func (l *AuthorizeNode) Del() {
-	l.Lock.Lock()
-	defer l.Lock.Unlock()
-	randIndex := rand.Intn(len(l.NodesSlice))
-	delete(l.Nodes, l.NodesSlice[randIndex])
-	l.NodesSlice = append(l.NodesSlice[:randIndex], l.NodesSlice[randIndex+1:]...)
-	if CollectorappIdentity == "master" {
-		pushSlaveSignal <- 1
-	}
-	return
-}
-func (l *AuthorizeNode) Len() (length int) {
-	l.Lock.RLock()
-	defer l.Lock.RUnlock()
-	return len(l.Nodes)
-}
-
-type ControRes struct {
-	Success bool      `json:"success"`
-	Code    int       `json:"code"`
-	Message string    `json:"message"`
-	Data    NodeLimit `json:"data"`
-}
-type NodeLimit struct {
-	AutoAuthorize  bool     `json:"auto_authorize"`
-	Limit          int64    `json:"limit"`
-	Nodes          []string `json:"nodes"`
-	SlaveCollector []string `json:"slave_collector"`
-}
 
 // contextKey is a wrapper type for use in context.WithValue() to satisfy golint
 // https://github.com/golang/go/issues/17293
@@ -189,16 +109,16 @@ func RegisterTopologyRoutes(router *mux.Router, r Reporter, capabilities map[str
 		Name("api_topology_topology_id")
 	get.Handle("/api/report",
 		gzipHandler(requestContextDecorator(makeRawReportHandler(r))))
-	get.Handle("/api/node/authorize",
+	get.Handle("/api/node/authorize/info",
 		gzipHandler(requestContextDecorator(nodeAuthorizeHandler())))
 	get.Handle("/api/probes",
 		gzipHandler(requestContextDecorator(makeProbeHandler(r))))
 }
 
-//Output the current node authorization
+// Output the current node authorization
 func nodeAuthorizeHandler() CtxHandlerFunc {
 	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-		respondWith(ctx, w, http.StatusOK, NodeLimit{
+		respondWith(ctx, w, http.StatusOK, httpclient.NodeLimit{
 			AutoAuthorize:  AutoAuthorize,
 			Limit:          LimitNode,
 			Nodes:          AuthorizeNodeList.NodesSlice,
@@ -212,22 +132,6 @@ type SlaveResp struct {
 	List []string
 }
 
-func DelayInit() {
-	if CollectorappIdentity == "master" {
-		for _ = range pushSlaveSignal {
-			tmpNodeLimit := NodeLimit{
-				AutoAuthorize: false,
-				Limit:         LimitNode,
-				Nodes:         AuthorizeNodeList.NodesSlice,
-			}
-			tmpRequest, _ := jsoniter.MarshalToString(tmpNodeLimit)
-			SlaveCollectors.Range(func(addr string) error {
-				http.Post(addr+"/api/node/limit", "application/json", strings.NewReader(tmpRequest))
-				return nil
-			})
-		}
-	}
-}
 func RegisterReportPostHandler(a Adder, router *mux.Router) {
 	post := router.Methods("POST").Subrouter()
 	post.HandleFunc("/api/report", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
@@ -314,7 +218,7 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	post.HandleFunc("/api/slave", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-		//Save control sent from collector
+		//保存所有子收集器的地址
 		var (
 			resp               = SlaveResp{}
 			tmpSlaveCollectors = &SlaveCollector{
@@ -327,16 +231,10 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 			respondWith(ctx, w, http.StatusInternalServerError, err)
 			return
 		}
-		tmpLimit := &NodeLimit{
-			AutoAuthorize: false,
-			Limit:         LimitNode,
-			Nodes:         AuthorizeNodeList.NodesSlice,
-		}
-		reqData, _ := jsoniter.MarshalToString(tmpLimit)
 		for _, slave := range resp.List {
 			if !SlaveCollectors.Exists(slave) {
 				//send limit
-				_, _ = http.Post(slave+"/api/node/limit", "application/json", strings.NewReader(reqData))
+				pushSlaveSignal <- slave
 			}
 			tmpSlaveCollectors.Set(slave)
 		}
@@ -345,24 +243,16 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 	}))
 	post.HandleFunc("/api/node/limit", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 		var (
-			resp = NodeLimit{}
+			resp = httpclient.NodeLimit{}
 		)
 		log.Info("Received node limit request")
 		if err := json.NewDecoder(r.Body).Decode(&resp); err != nil {
 			respondWith(ctx, w, http.StatusInternalServerError, err)
 			return
 		}
-		SetNodeLimit(resp)
+		SetNodeLimit(&resp)
 		w.WriteHeader(http.StatusOK)
 	}))
-}
-
-func SetNodeLimit(limit NodeLimit) {
-	LimitNode = limit.Limit
-	AutoAuthorize = limit.AutoAuthorize
-	AuthorizeNodeList.Init(limit.Nodes)
-	SlaveCollectors.Init(limit.SlaveCollector)
-	log.Info("Node limit response: ", LimitNode, AutoAuthorize, AuthorizeNodeList.Len())
 }
 
 // RegisterAdminRoutes registers routes for admin calls with a http mux.

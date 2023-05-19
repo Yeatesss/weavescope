@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/weaveworks/scope/common/target"
 	"net/http"
 	"net/url"
 	"strings"
@@ -169,6 +170,8 @@ func (c *multiClient) Publish(r report.Report) error {
 	if Redirect != "" {
 		req, _ := http.NewRequest("POST", "http://"+Redirect+":6789/api/redirect-report", bytes.NewReader(buf.Bytes()))
 		req.Header.Set("Content-Encoding", "gzip")
+		req.Header.Add("Target-App", "scope")
+		req.Header.Add("Target-Host", target.TargetHost)
 		req.Header.Set("Content-Type", "application/msgpack")
 		client := &http.Client{}
 		_, err := client.Do(req)

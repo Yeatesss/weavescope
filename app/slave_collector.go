@@ -40,7 +40,7 @@ func (l *SlaveCollector) Init(nodes []string) {
 		l.Collectors[node] = struct{}{}
 	}
 	if CollectorappIdentity == "master" {
-		pushSlaveSignal <- 1
+		pushSlaveSignal <- "all"
 	}
 	return
 }

@@ -5,6 +5,7 @@ package multitenant
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/weaveworks/scope/common/target"
 	"io"
 	"net"
 	"net/http"
@@ -410,6 +411,8 @@ func oneCall(ctx context.Context, endpoint, path, userid string) (io.ReadCloser,
 	req = req.WithContext(ctx)
 	req.Header.Set(user.OrgIDHeaderName, userid) //gggg
 	req.Header.Set("Accept", "application/msgpack")
+	req.Header.Add("Target-App", "scope")
+	req.Header.Add("Target-Host", target.TargetHost)
 	req.Header.Set("Accept-Encoding", "identity") // disable compression
 	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
 		var ht *nethttp.Tracer

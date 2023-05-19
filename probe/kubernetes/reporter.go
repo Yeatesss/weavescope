@@ -720,6 +720,7 @@ func (r *Reporter) namespaceTopology() (report.Topology, error) {
 	return result, err
 }
 
+//获取kubernets节点数据
 func (r *Reporter) hostTopology() (report.Topology, error) {
 	result := report.MakeTopology()
 	// Add buttons for Host view, with the ID of the Kubernetes probe

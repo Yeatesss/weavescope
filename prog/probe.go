@@ -26,7 +26,6 @@ import (
 	"github.com/weaveworks/common/sanitize"
 	"github.com/weaveworks/common/signals"
 	"github.com/weaveworks/common/tracing"
-	"github.com/weaveworks/go-checkpoint"
 	"github.com/weaveworks/scope/common/hostname"
 	"github.com/weaveworks/scope/common/weave"
 	"github.com/weaveworks/scope/common/xfer"
@@ -40,7 +39,6 @@ import (
 	"github.com/weaveworks/scope/probe/host"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/probe/overlay"
-	"github.com/weaveworks/scope/probe/plugins"
 	"github.com/weaveworks/scope/probe/process"
 	"github.com/weaveworks/scope/report"
 )
@@ -65,26 +63,26 @@ func checkNewScopeVersion(flags probeFlags) {
 		checkpointFlags["ecs_enabled"] = "true"
 	}
 
-	go func() {
-		handleResponse := func(r *checkpoint.CheckResponse, err error) {
-			if err != nil {
-				log.Errorf("Error checking version: %v", err)
-			} else if r.Outdated {
-				log.Infof("Scope version %s is available; please update at %s",
-					r.CurrentVersion, r.CurrentDownloadURL)
-			}
-		}
-
-		// Start background version checking
-		params := checkpoint.CheckParams{
-			Product: "scope-probe",
-			Version: version,
-			Flags:   checkpointFlags,
-		}
-		resp, err := checkpoint.Check(&params)
-		handleResponse(resp, err)
-		checkpoint.CheckInterval(&params, versionCheckPeriod, handleResponse)
-	}()
+	//go func() {
+	//	handleResponse := func(r *checkpoint.CheckResponse, err error) {
+	//		if err != nil {
+	//			log.Errorf("Error checking version: %v", err)
+	//		} else if r.Outdated {
+	//			log.Infof("Scope version %s is available; please update at %s",
+	//				r.CurrentVersion, r.CurrentDownloadURL)
+	//		}
+	//	}
+	//
+	//	// Start background version checking
+	//	params := checkpoint.CheckParams{
+	//		Product: "scope-probe",
+	//		Version: version,
+	//		Flags:   checkpointFlags,
+	//	}
+	//	resp, err := checkpoint.Check(&params)
+	//	handleResponse(resp, err)
+	//	checkpoint.CheckInterval(&params, versionCheckPeriod, handleResponse)
+	//}()
 }
 
 func maybeExportProfileData(flags probeFlags) {
@@ -393,25 +391,25 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		}
 	}
 
-	if flags.pluginsRoot != "" {
-		pluginRegistry, err := plugins.NewRegistry(
-			flags.pluginsRoot,
-			pluginAPIVersion,
-			map[string]string{
-				"probe_id":    probeID,
-				"api_version": pluginAPIVersion,
-			},
-			handlerRegistry,
-			p,
-		)
-
-		if err != nil {
-			log.Errorf("plugins: problem loading: %v", err)
-		} else {
-			defer pluginRegistry.Close()
-			p.AddReporter(pluginRegistry)
-		}
-	}
+	//if flags.pluginsRoot != "" {
+	//	pluginRegistry, err := plugins.NewRegistry(
+	//		flags.pluginsRoot,
+	//		pluginAPIVersion,
+	//		map[string]string{
+	//			"probe_id":    probeID,
+	//			"api_version": pluginAPIVersion,
+	//		},
+	//		handlerRegistry,
+	//		p,
+	//	)
+	//
+	//	if err != nil {
+	//		log.Errorf("plugins: problem loading: %v", err)
+	//	} else {
+	//		defer pluginRegistry.Close()
+	//		p.AddReporter(pluginRegistry)
+	//	}
+	//}
 
 	maybeExportProfileData(flags)
 	go httpServer(clients)

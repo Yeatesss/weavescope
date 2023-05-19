@@ -76,8 +76,8 @@ func NewWeavePublisher(weaveClient WeaveClient, dockerClient DockerClient, inter
 		weaveClient:   weaveClient,
 		interfaces:    interfaces,
 	}
-	w.backoff = backoff.New(w.updateDNS, "updating weaveDNS")
-	go w.backoff.Start()
+	//w.backoff = backoff.New(w.updateDNS, "updating weaveDNS")
+	//go w.backoff.Start()
 	return w
 }
 

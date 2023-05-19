@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/weaveworks/common/user"
+	"github.com/weaveworks/scope/common/target"
 	"io/ioutil"
 	"net"
 	"os"
@@ -91,6 +92,7 @@ type flags struct {
 	containerLabelFilterFlags        containerLabelFiltersFlag
 	containerLabelFilterFlagsExclude containerLabelFiltersFlag
 	noApp                            bool
+	targetHost                       string
 	probeOnly                        bool
 }
 
@@ -148,6 +150,7 @@ type probeFlags struct {
 }
 
 type appFlags struct {
+	insecure       bool
 	identity       string
 	window         time.Duration
 	maxTopNodes    int
@@ -294,6 +297,7 @@ func setupFlags(flags *flags) {
 	// They are also here so they are included in usage, and the probe uses them to decide if to
 	// publish to localhost.
 	flag.BoolVar(&flags.noApp, "no-app", false, "Don't run the app.")
+	flag.StringVar(&flags.targetHost, "target", "", "Redirect gateway for internal requests.")
 	flag.BoolVar(&flags.probeOnly, "probe-only", false, "Only run the probe.")
 	flag.Bool("no-probe", false, "Don't run the probe.")
 	flag.Bool("app-only", false, "Only run the app.")
@@ -367,6 +371,7 @@ func setupFlags(flags *flags) {
 	flag.StringVar(&flags.probe.weaveHostname, "probe.weave.hostname", "", "Hostname to lookup in WeaveDNS")
 
 	// App flags
+	flag.BoolVar(&flags.app.insecure, "app.insecure", false, "(SSL) explicitly allow \"insecure\" SSL connections and transfers")
 	flag.StringVar(&flags.app.identity, "app.identity", "master", "Identity of the current collector: master|slave")
 	flag.DurationVar(&flags.app.window, "app.window", 15*time.Second, "window")
 	flag.IntVar(&flags.app.maxTopNodes, "app.max-topology-nodes", 10000, "drop topologies with more than this many nodes (0 to disable)")
@@ -423,7 +428,6 @@ func main() {
 	flags.app.BillingClientConfig.RegisterFlags(flag.CommandLine)
 	flag.Parse()
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
-	fmt.Println("Host IP:", os.Getenv("HOST_IP"))
 	//flags.probe.userid = "2222222"
 	//
 	//if strings.Index(hostname.Get(), "n0") >= 0 || strings.Index(hostname.Get(), "n1") >= 0 {
@@ -435,6 +439,7 @@ func main() {
 		flags.probe.logLevel = "debug"
 		flags.app.logLevel = "debug"
 	}
+	target.TargetHost = flags.targetHost
 	if flags.weaveHostname != "" {
 		if flags.probe.weaveHostname == "" {
 			flags.probe.weaveHostname = flags.weaveHostname
@@ -448,10 +453,10 @@ func main() {
 	flags.probe.noApp = flags.noApp || flags.probeOnly
 
 	// Special case for #1191, check listen address is well formed
-	_, port, err := net.SplitHostPort(flags.app.listen)
-	if err != nil {
-		log.Fatalf("Invalid value for -app.http.address: %v", err)
-	}
+	//_, port, err := net.SplitHostPort(flags.app.listen)
+	//if err != nil {
+	//	log.Fatalf("Invalid value for -app.http.address: %v", err)
+	//}
 	if flags.probe.httpListen != "" {
 		_, _, err := net.SplitHostPort(flags.probe.httpListen)
 		if err != nil {
@@ -462,18 +467,19 @@ func main() {
 	// Special case probe push address parsing
 	targets := []appclient.Target{}
 	if flags.mode == "probe" || flags.dryRun {
+		var err error
 		args := []string{}
-		if flags.probe.token != "" {
-			// service mode
-			if len(flag.Args()) == 0 {
-				args = append(args, defaultServiceHost)
-			}
-		} else if !flags.probe.noApp {
-			// We hardcode 127.0.0.1 instead of using localhost
-			// since it leads to problems in exotic DNS setups
-			args = append(args, fmt.Sprintf("127.0.0.1:%s", port))
-		}
-		if addr := os.Getenv("RESOURCE_COLLECTION_ADDR"); addr != "" {
+		//if flags.probe.token != "" {
+		//	// service mode
+		//	if len(flag.Args()) == 0 {
+		//		args = append(args, defaultServiceHost)
+		//	}
+		//} else if !flags.probe.noApp {
+		//	// We hardcode 127.0.0.1 instead of using localhost
+		//	// since it leads to problems in exotic DNS setups
+		//	args = append(args, fmt.Sprintf("127.0.0.1:%s", port))
+		//}
+		if addr := os.Getenv("CONTROL_PROXY_HOST"); addr != "" {
 			host.CollectorAddress = addr
 			args = append(args, addr)
 		}

@@ -65,3 +65,7 @@ prog/externalui/externalui.go
 client/build-pkg
 client/bundle
 client/.yarnrc
+build/develop_13_probe_linux
+build/develop_88_probe_linux
+build/develop_app_88_linux
+build

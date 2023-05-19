@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"github.com/weaveworks/common/user"
+	"github.com/weaveworks/scope/common/target"
 	"io"
 	"net"
 	"net/http"
@@ -50,6 +51,7 @@ func (pc ProbeConfig) authorizeHeaders(headers http.Header) {
 	headers.Set(xfer.ScopeProbeIDHeader, pc.ProbeID)
 	headers.Set(xfer.ScopeProbeVersionHeader, pc.ProbeVersion)
 	headers.Set("user-agent", "Scope_Probe/"+pc.ProbeVersion)
+	headers.Set("Target-Host", target.TargetHost)
 
 }
 
@@ -58,6 +60,8 @@ func (pc ProbeConfig) authorizedRequest(method string, urlStr string, body io.Re
 	if err == nil {
 		pc.authorizeHeaders(req.Header)
 	}
+	req.Header.Add("Target-App", "scope")
+	req.Header.Add("Target-Host", target.TargetHost)
 	return req, err
 }
 
