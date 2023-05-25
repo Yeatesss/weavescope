@@ -443,17 +443,21 @@ func (c *container) makeNetworkSet() report.Sets {
 
 	networkName := c.container.NetworkSettings.Bridge
 	for mode, network := range c.container.NetworkSettings.Networks {
-		networkStr, _ := jsoniter.MarshalToString(NetworkSet{
-			Name:       networkName,
-			Gateway:    network.Gateway,
-			Mode:       mode,
-			IPv6:       network.GlobalIPv6Address,
-			IPv4:       network.IPAddress,
-			NetworkID:  network.NetworkID,
-			EndpointID: network.EndpointID,
-			Mac:        network.MacAddress,
-		})
-		networkSlice = append(networkSlice, networkStr)
+		if network.NetworkID != "" || network.EndpointID != "" {
+			networkStr, _ := jsoniter.MarshalToString(NetworkSet{
+				Name:       networkName,
+				Gateway:    network.Gateway,
+				Mode:       mode,
+				IPv6:       network.GlobalIPv6Address,
+				IPv4:       network.IPAddress,
+				NetworkID:  network.NetworkID,
+				EndpointID: network.EndpointID,
+				Mac:        network.MacAddress,
+			})
+
+			networkSlice = append(networkSlice, networkStr)
+		}
+
 	}
 
 	return report.MakeSets().Add(report.Network, report.MakeStringSet(networkSlice...))
