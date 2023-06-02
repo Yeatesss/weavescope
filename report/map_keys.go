@@ -78,6 +78,8 @@ const (
 	KubernetesRestartCount         = "kubernetes_restart_count"
 	KubernetesHostIP               = "kubernetes_host_ip"
 	KubernetesHostName             = "kubernetes_host_name"
+	KubernetesLimitCpu             = "kubernetes_limit_cpu"
+	KubernetesLimitMem             = "kubernetes_limit_mem"
 	KubernetesMisscheduledReplicas = "kubernetes_misscheduled_replicas"
 	KubernetesPublicIP             = "kubernetes_public_ip"
 	KubernetesSchedule             = "kubernetes_schedule"
@@ -135,10 +137,12 @@ const (
 	WeavePeerNickName = "weave_peer_nick_name"
 )
 
-/* Lookup table to allow msgpack/json decoder to avoid heap allocation
-   for common ps.Map keys. The map is static so we don't have to lock
-   access from multiple threads and don't have to worry about it
-   getting clogged with values that are only used once.
+/*
+Lookup table to allow msgpack/json decoder to avoid heap allocation
+
+	for common ps.Map keys. The map is static so we don't have to lock
+	access from multiple threads and don't have to worry about it
+	getting clogged with values that are only used once.
 */
 var commonKeys = map[string]string{
 	Endpoint:              Endpoint,

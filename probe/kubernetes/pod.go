@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"fmt"
 	"github.com/weaveworks/scope/tools/vars"
 	"strconv"
 	"strings"
@@ -12,11 +13,13 @@ import (
 
 // These constants are keys used in node metadata
 const (
-	State           = report.KubernetesState
-	IsInHostNetwork = report.KubernetesIsInHostNetwork
-	RestartCount    = report.KubernetesRestartCount
-	HostIP          = report.KubernetesHostIP
-	NodeName        = report.KubernetesHostName
+	State            = report.KubernetesState
+	IsInHostNetwork  = report.KubernetesIsInHostNetwork
+	RestartCount     = report.KubernetesRestartCount
+	HostIP           = report.KubernetesHostIP
+	NodeName         = report.KubernetesHostName
+	ResourceLimitCpu = report.KubernetesLimitCpu
+	ResourceLimitMem = report.KubernetesLimitMem
 )
 
 // Pod represents a Kubernetes pod
@@ -89,6 +92,7 @@ func (p *pod) VolumeClaimNames() []string {
 }
 
 func (p *pod) GetNode(probeID string) report.Node {
+	var limits []string // container_name,cpu,mem
 	latests := map[string]string{
 		State:                 p.State(),
 		ClusterUUID:           vars.ClusterUUID,
@@ -104,13 +108,26 @@ func (p *pod) GetNode(probeID string) report.Node {
 		// and must start and end with an alphanumeric character.
 		latests[VolumeClaim] = strings.Join(p.VolumeClaimNames(), report.ScopeDelim)
 	}
-
+	for _, container := range p.Spec.Containers {
+		var (
+			cpu string
+			mem string
+		)
+		if container.Resources.Limits.Cpu().String() != "0" {
+			cpu = container.Resources.Limits.Cpu().String()
+		}
+		if container.Resources.Limits.Memory().String() != "0" {
+			mem = container.Resources.Limits.Memory().String()
+		}
+		limits = append(limits, fmt.Sprintf("%s,%s,%s", container.Name, cpu, mem))
+	}
 	if p.Pod.Spec.HostNetwork {
 		latests[IsInHostNetwork] = "true"
 	}
 
 	return p.MetaNode(report.MakePodNodeID(p.UID())).WithLatests(latests).
 		WithParents(p.parents).
+		WithSet("limit", limits).
 		WithLatestActiveControls(GetLogs, DeletePod, Describe)
 }
 
