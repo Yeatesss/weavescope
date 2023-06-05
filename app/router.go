@@ -180,32 +180,76 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 					AuthorizeNodeList.Del()
 				}
 			}
+			var clusterUUID string
+			var clusterNodes *Nodes
+			var onceDo = sync.Once{}
+			var tidy bool
 			for key, node := range rpt.Host.Nodes {
-				if activeControls, ok := node.Latest.Lookup("active_controls"); ok && activeControls == "host_exec" && key != "" {
-					//处理节点授权信息
-					if AuthorizeNodeList.Exists(key) || LimitNode == UnLimit {
-						//授权列表存在即授权
-						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "1")
-						continue
+				activeControls, _ := node.Latest.Lookup("active_controls")
+
+				onceDo.Do(func() {
+					clusterUUID, _ = node.Latest.Lookup("cluster_uuid")
+					clusterNodes = NodeReplenisher.GetNodes(clusterUUID)
+					if activeControls == "kubernetes_cordon_node" {
+						clusterNodes.PreProcessed()
+						*clusterNodes.deleteMark = true
+						clusterNodes.deleteMark = NewBoolPoint(false)
 					}
-					if !AutoAuthorize {
-						//未开启自动授权
-						hasUnAuthorized = true
-						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "0")
-						continue
+				})
+				switch activeControls {
+				case "host_exec":
+					nodeName, _ := node.Latest.Lookup("host_name")
+					if nodeName != "" {
+						tmpNode := clusterNodes.GetNode(nodeName)
+						rpt.Host.Nodes[key] = rpt.Host.Nodes[key].WithLatest("kubernetes.node-role", time.Now(), tmpNode.NodeRole)
 					}
-					if int(LimitNode) > AuthorizeNodeList.Len() {
-						//不限制或者未达到限制上线，则进行授权
-						AuthorizeNodeList.Set(key)
-						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "1")
-					} else {
-						//未授权
-						hasUnAuthorized = true
-						rpt.Host.Nodes[key] = node.WithLatest("is_authorized", time.Now(), "0")
+					if key != "" {
+						//处理节点授权信息
+						if AuthorizeNodeList.Exists(key) || LimitNode == UnLimit {
+							//授权列表存在即授权
+							rpt.Host.Nodes[key] = rpt.Host.Nodes[key].WithLatest("is_authorized", time.Now(), "1")
+							break
+						}
+						if !AutoAuthorize {
+							//未开启自动授权
+							hasUnAuthorized = true
+							rpt.Host.Nodes[key] = rpt.Host.Nodes[key].WithLatest("is_authorized", time.Now(), "0")
+							break
+						}
+						if int(LimitNode) > AuthorizeNodeList.Len() {
+							//不限制或者未达到限制上线，则进行授权
+							AuthorizeNodeList.Set(key)
+							rpt.Host.Nodes[key] = rpt.Host.Nodes[key].WithLatest("is_authorized", time.Now(), "1")
+						} else {
+							//未授权
+							hasUnAuthorized = true
+							rpt.Host.Nodes[key] = rpt.Host.Nodes[key].WithLatest("is_authorized", time.Now(), "0")
+						}
+					}
+
+				case "kubernetes_cordon_node":
+					tidy = true
+					var nodeName, nodeRole string
+					nodeName = strings.Replace(node.ID, ";<host>", "", -1)
+					if nodeName != "" {
+						nodeRole, _ = node.Latest.Lookup("node_role")
+						tmpNode := clusterNodes.GetNode(nodeName)
+						tmpNode.NodeRole = nodeRole
+						clusterNodes.SetNode(nodeName, tmpNode)
 					}
 				}
 			}
+			if tidy {
+				NodeReplenisher.Clear <- clusterUUID
+			}
+			if clusterNodes != nil {
+				clusterNodes.nodes.Iter(func(k string, v *Node) (stop bool) {
+					fmt.Println(k, v.NodeRole)
+					return false
+				})
+			}
 		}
+
 		if hasUnAuthorized {
 			tmpRpt := rpt.RetentionElements("host")
 			rpt = &tmpRpt

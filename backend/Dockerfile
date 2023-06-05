@@ -1,4 +1,4 @@
-FROM golang:1.16.2
+FROM golang:1.18-buster
 ENV SCOPE_SKIP_UI_ASSETS true
 RUN set -eux; \
    export arch_val="$(dpkg --print-architecture)"; \
@@ -8,21 +8,14 @@ RUN set -eux; \
    else \
      apt-get install -y libpcap-dev time file shellcheck git curl build-essential; \
    fi; \
-   \
    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN go clean -i net && \
-	go install -tags netgo std && \
-   export arch_val="$(dpkg --print-architecture)"; \
-   if [ "$arch_val" != "ppc64el" ] && [ "$arch_val" != "s390x" ]; then \
-	go install -race -tags netgo std; \
-   fi; \
-    go get -tags netgo \
+
+RUN go env -w GO111MODULE=auto && go get -tags netgo \
 		github.com/fzipp/gocyclo \
 		golang.org/x/lint/golint \
 		github.com/kisielk/errcheck \
 		github.com/client9/misspell/cmd/misspell && \
-	chmod a+wr --recursive /usr/local/go && \
 	rm -rf /go/pkg/ /go/src/
 
    # Only install shfmt on amd64, as the version v1.3.0 isn't supported for ppc64le
@@ -35,7 +28,7 @@ RUN export arch_val="$(dpkg --print-architecture)"; \
    fi;
 
 # Install Docker (client only)
-ENV DOCKERVERSION=17.09.1-ce
+ENV DOCKERVERSION=23.0.6
 RUN export arch_val="$(dpkg --print-architecture)"; \
     if [ "$arch_val" = "arm64" ]; then \
         curl -fsSLO https://download.docker.com/linux/static/stable/aarch64/docker-${DOCKERVERSION}.tgz; \

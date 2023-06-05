@@ -8,6 +8,7 @@ import (
 	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/tools/vars"
 	"k8s.io/apimachinery/pkg/labels"
+	"strings"
 )
 
 // These constants are keys used in node metadata
@@ -720,7 +721,7 @@ func (r *Reporter) namespaceTopology() (report.Topology, error) {
 	return result, err
 }
 
-//获取kubernets节点数据
+// 获取kubernets节点数据
 func (r *Reporter) hostTopology() (report.Topology, error) {
 	result := report.MakeTopology()
 	// Add buttons for Host view, with the ID of the Kubernetes probe
@@ -735,17 +736,25 @@ func (r *Reporter) hostTopology() (report.Topology, error) {
 	}
 
 	for _, n := range nodes {
-		var activeControl string
+		var (
+			activeControl string
+			nodeRoles     []string
+		)
 		if n.Spec.Unschedulable {
 			activeControl = UncordonNode
 		} else {
 			activeControl = CordonNode
 		}
-
+		for labelKey, _ := range n.GetLabels() {
+			if strings.Contains(labelKey, "node-role.kubernetes.io") {
+				nodeRoles = append(nodeRoles, strings.Replace(labelKey, "node-role.kubernetes.io/", "", -1))
+			}
+		}
 		result.AddNode(
 			report.MakeNode(report.MakeHostNodeID(n.Name)).
 				WithTopology(report.Host).
 				WithLatestActiveControls(activeControl).
+				WithLatest("node_role", mtime.Now(), strings.Join(nodeRoles, ",")).
 				WithLatest("cluster_uuid", mtime.Now(), vars.ClusterUUID),
 		)
 	}

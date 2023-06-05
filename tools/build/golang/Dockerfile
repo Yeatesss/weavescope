@@ -1,4 +1,4 @@
-FROM golang:1.14.4-stretch
+FROM golang:1.18.3-stretch
 RUN apt-get update && \
     apt-get install -y \
       curl \
