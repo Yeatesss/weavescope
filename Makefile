@@ -94,7 +94,7 @@ $(SCOPE_EXE) $(RUNSVINIT) lint tests shell prog/staticui/staticui.go prog/extern
 		-e HOME=/go/src/github.com/weaveworks/scope \
 		-e GOARCH -e GOOS -e CIRCLECI -e CIRCLE_BUILD_NUM -e CIRCLE_NODE_TOTAL \
 		-e CIRCLE_NODE_INDEX -e COVERDIR -e SLOW -e TESTDIRS \
-		$(SCOPE_BACKEND_BUILD_IMAGE):build-updates-1b1c9664 SCOPE_VERSION=$(SCOPE_VERSION) CODECGEN_UID=$(CODECGEN_UID) $@
+		$(SCOPE_BACKEND_BUILD_IMAGE):1.3-edb222c7-WIP SCOPE_VERSION=$(SCOPE_VERSION) CODECGEN_UID=$(CODECGEN_UID) $@
 
 else
 
