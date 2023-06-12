@@ -110,7 +110,6 @@ func NewReporter(hostID, hostName, probeID, version string, pipes controls.PipeC
 		pipeIDToTTY:     map[string]uintptr{},
 		dockerClient:    client,
 	}
-	r.registerControls()
 	return r
 }
 
@@ -205,22 +204,14 @@ func (r *Reporter) Report() (report.Report, error) {
 				Add(LocalNetworks, report.MakeStringSet(localCIDRs...)),
 			).
 			WithMetrics(metrics).
-			WithLatest("cluster_uuid", mtime.Now(), string(uuid)).
-			WithLatestActiveControls(ExecHost),
+			WithLatest("cluster_uuid", mtime.Now(), string(uuid)),
 	)
-
-	rep.Host.Controls.AddControl(report.Control{
-		ID:    ExecHost,
-		Human: "Exec shell",
-		Icon:  "fa fa-terminal",
-	})
 
 	return rep, nil
 }
 
 // Stop stops the reporter.
 func (r *Reporter) Stop() {
-	r.deregisterControls()
 }
 
 func GetOutboundIP(address string) (net.IP, error) {

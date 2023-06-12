@@ -304,7 +304,7 @@ func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
 		//TODO
 		metadata = map[string]string{report.HostId: r.hostNodeID}
 	)
-	for _, topology := range []report.Topology{rpt.Service, rpt.Deployment, rpt.DaemonSet, rpt.StatefulSet, rpt.CronJob, rpt.PersistentVolumeClaim, rpt.PersistentVolume, rpt.StorageClass, rpt.VolumeSnapshot, rpt.VolumeSnapshotData, rpt.Job, rpt.Namespace, rpt.Pod} {
+	for _, topology := range []report.Topology{rpt.Service, rpt.Deployment, rpt.DaemonSet, rpt.StatefulSet, rpt.CronJob, rpt.PersistentVolumeClaim, rpt.PersistentVolume, rpt.StorageClass, rpt.Job, rpt.Namespace, rpt.Pod} {
 		for _, node := range topology.Nodes {
 			topology.ReplaceNode(node.WithLatests(metadata))
 		}
@@ -373,14 +373,6 @@ func (r *Reporter) Report() (report.Report, error) {
 	if err != nil {
 		return result, err
 	}
-	volumeSnapshotTopology, _, err := r.volumeSnapshotTopology()
-	if err != nil {
-		return result, err
-	}
-	volumeSnapshotDataTopology, _, err := r.volumeSnapshotDataTopology()
-	if err != nil {
-		return result, err
-	}
 	hostTopology, err := r.hostTopology()
 	if err != nil {
 		return result, err
@@ -396,8 +388,6 @@ func (r *Reporter) Report() (report.Report, error) {
 	result.PersistentVolume = result.PersistentVolume.Merge(persistentVolumeTopology)
 	result.PersistentVolumeClaim = result.PersistentVolumeClaim.Merge(persistentVolumeClaimTopology)
 	result.StorageClass = result.StorageClass.Merge(storageClassTopology)
-	result.VolumeSnapshot = result.VolumeSnapshot.Merge(volumeSnapshotTopology)
-	result.VolumeSnapshotData = result.VolumeSnapshotData.Merge(volumeSnapshotDataTopology)
 	result.Job = result.Job.Merge(jobTopology)
 	result.Host = result.Host.Merge(hostTopology)
 
@@ -504,12 +494,6 @@ func (r *Reporter) persistentVolumeClaimTopology() (report.Topology, []Persisten
 	result := report.MakeTopology().
 		WithMetadataTemplates(PersistentVolumeClaimMetadataTemplates).
 		WithTableTemplates(TableTemplates)
-	result.Controls.AddControl(report.Control{
-		ID:    CreateVolumeSnapshot,
-		Human: "Create snapshot",
-		Icon:  "fa fa-camera",
-		Rank:  0,
-	})
 	result.Controls.AddControl(DescribeControl)
 	err := r.client.WalkPersistentVolumeClaims(func(p PersistentVolumeClaim) error {
 		result.AddNode(p.GetNode(r.probeID))
@@ -531,46 +515,6 @@ func (r *Reporter) storageClassTopology() (report.Topology, []StorageClass, erro
 		return nil
 	})
 	return result, storageClasses, err
-}
-
-func (r *Reporter) volumeSnapshotTopology() (report.Topology, []VolumeSnapshot, error) {
-	volumeSnapshots := []VolumeSnapshot{}
-	result := report.MakeTopology().
-		WithMetadataTemplates(VolumeSnapshotMetadataTemplates).
-		WithTableTemplates(TableTemplates)
-	result.Controls.AddControl(report.Control{
-		ID:    CloneVolumeSnapshot,
-		Human: "Clone snapshot",
-		Icon:  "far fa-clone",
-		Rank:  0,
-	})
-	result.Controls.AddControl(report.Control{
-		ID:    DeleteVolumeSnapshot,
-		Human: "Delete",
-		Icon:  "far fa-trash-alt",
-		Rank:  1,
-	})
-	result.Controls.AddControl(DescribeControl)
-	err := r.client.WalkVolumeSnapshots(func(p VolumeSnapshot) error {
-		result.AddNode(p.GetNode(r.probeID))
-		volumeSnapshots = append(volumeSnapshots, p)
-		return nil
-	})
-	return result, volumeSnapshots, err
-}
-
-func (r *Reporter) volumeSnapshotDataTopology() (report.Topology, []VolumeSnapshotData, error) {
-	volumeSnapshotData := []VolumeSnapshotData{}
-	result := report.MakeTopology().
-		WithMetadataTemplates(VolumeSnapshotDataMetadataTemplates).
-		WithTableTemplates(TableTemplates)
-	result.Controls.AddControl(DescribeControl)
-	err := r.client.WalkVolumeSnapshotData(func(p VolumeSnapshotData) error {
-		result.AddNode(p.GetNode(r.probeID))
-		volumeSnapshotData = append(volumeSnapshotData, p)
-		return nil
-	})
-	return result, volumeSnapshotData, err
 }
 
 func (r *Reporter) jobTopology() (report.Topology, []Job, error) {

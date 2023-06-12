@@ -266,22 +266,6 @@ func MakeRegistry() *Registry {
 			HideIfEmpty: true,
 		},
 		APITopologyDesc{
-			id:          ecsTasksID,
-			renderer:    render.ECSTaskRenderer,
-			Name:        "Tasks",
-			Rank:        3,
-			Options:     []APITopologyOptionGroup{unmanagedFilter},
-			HideIfEmpty: true,
-		},
-		APITopologyDesc{
-			id:          ecsServicesID,
-			parent:      ecsTasksID,
-			renderer:    render.ECSServiceRenderer,
-			Name:        "Services",
-			Options:     []APITopologyOptionGroup{unmanagedFilter},
-			HideIfEmpty: true,
-		},
-		APITopologyDesc{
 			id:          swarmServicesID,
 			renderer:    render.SwarmServiceRenderer,
 			Name:        "Services",

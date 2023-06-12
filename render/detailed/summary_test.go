@@ -220,8 +220,6 @@ func TestMakeNodeSummaryNoMetadata(t *testing.T) {
 		report.DaemonSet:      report.MakeDaemonSetNodeID("005e2999-d429-11e7-8535-0a41257e78e8"),
 		report.StatefulSet:    report.MakeStatefulSetNodeID("005e2999-d429-11e7-8535-0a41257e78e8"),
 		report.CronJob:        report.MakeCronJobNodeID("005e2999-d429-11e7-8535-0a41257e78e8"),
-		report.ECSTask:        report.MakeECSTaskNodeID("arn:aws:ecs:us-east-1:012345678910:task/1dc5c17a-422b-4dc4-b493-371970c6c4d6"),
-		report.ECSService:     report.MakeECSServiceNodeID("cluster", "service"),
 		report.SwarmService:   report.MakeSwarmServiceNodeID("0001accbecc2c95e650fe641926fb923b7cc307a71101a1200af3759227b6d7d"),
 		report.Host:           report.MakeHostNodeID("ip-123-45-6-100"),
 		report.Overlay:        report.MakeOverlayNodeID("", "3e:ca:14:ca:12:5c"),

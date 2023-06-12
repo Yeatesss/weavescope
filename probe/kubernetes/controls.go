@@ -13,16 +13,13 @@ import (
 
 // Control IDs used by the kubernetes integration.
 const (
-	CloneVolumeSnapshot  = report.KubernetesCloneVolumeSnapshot
-	CreateVolumeSnapshot = report.KubernetesCreateVolumeSnapshot
-	GetLogs              = report.KubernetesGetLogs
-	Describe             = report.KubernetesDescribe
-	DeletePod            = report.KubernetesDeletePod
-	DeleteVolumeSnapshot = report.KubernetesDeleteVolumeSnapshot
-	ScaleUp              = report.KubernetesScaleUp
-	ScaleDown            = report.KubernetesScaleDown
-	CordonNode           = report.KubernetesCordonNode
-	UncordonNode         = report.KubernetesUncordonNode
+	GetLogs      = report.KubernetesGetLogs
+	Describe     = report.KubernetesDescribe
+	DeletePod    = report.KubernetesDeletePod
+	ScaleUp      = report.KubernetesScaleUp
+	ScaleDown    = report.KubernetesScaleDown
+	CordonNode   = report.KubernetesCordonNode
+	UncordonNode = report.KubernetesUncordonNode
 )
 
 // GroupName and version used by CRDs
@@ -59,10 +56,6 @@ func (r *Reporter) GetLogs(req xfer.Request, namespaceID, podID string, containe
 
 func (r *Reporter) describePod(req xfer.Request, namespaceID, podID string, _ []string) xfer.Response {
 	return r.describe(req, namespaceID, podID, ResourceMap["Pod"], apimeta.RESTMapping{})
-}
-
-func (r *Reporter) describePVC(req xfer.Request, namespaceID, pvcID, _ string) xfer.Response {
-	return r.describe(req, namespaceID, pvcID, ResourceMap["PersistentVolumeClaim"], apimeta.RESTMapping{})
 }
 
 func (r *Reporter) describeDeployment(req xfer.Request, namespaceID, deploymentID string) xfer.Response {
@@ -145,33 +138,8 @@ func (r *Reporter) describe(req xfer.Request, namespaceID, resourceID string, gr
 	}
 }
 
-func (r *Reporter) cloneVolumeSnapshot(req xfer.Request, namespaceID, volumeSnapshotID, persistentVolumeClaimID, capacity string) xfer.Response {
-	err := r.client.CloneVolumeSnapshot(namespaceID, volumeSnapshotID, persistentVolumeClaimID, capacity)
-	if err != nil {
-		return xfer.ResponseError(err)
-	}
-	return xfer.Response{}
-}
-
-func (r *Reporter) createVolumeSnapshot(req xfer.Request, namespaceID, persistentVolumeClaimID, capacity string) xfer.Response {
-	err := r.client.CreateVolumeSnapshot(namespaceID, persistentVolumeClaimID, capacity)
-	if err != nil {
-		return xfer.ResponseError(err)
-	}
-	return xfer.Response{}
-}
-
 func (r *Reporter) deletePod(req xfer.Request, namespaceID, podID string, _ []string) xfer.Response {
 	if err := r.client.DeletePod(namespaceID, podID); err != nil {
-		return xfer.ResponseError(err)
-	}
-	return xfer.Response{
-		RemovedNode: req.NodeID,
-	}
-}
-
-func (r *Reporter) deleteVolumeSnapshot(req xfer.Request, namespaceID, volumeSnapshotID, _, _ string) xfer.Response {
-	if err := r.client.DeleteVolumeSnapshot(namespaceID, volumeSnapshotID); err != nil {
 		return xfer.ResponseError(err)
 	}
 	return xfer.Response{
@@ -190,8 +158,6 @@ func (r *Reporter) Describe() func(xfer.Request) xfer.Response {
 		switch tag {
 		case "<pod>":
 			f = r.CapturePod(r.describePod)
-		case "<service>":
-			f = r.CaptureService(r.describeService)
 		case "<cronjob>":
 			f = r.CaptureCronJob(r.describeCronJob)
 		case "<deployment>":
@@ -200,16 +166,10 @@ func (r *Reporter) Describe() func(xfer.Request) xfer.Response {
 			f = r.CaptureDaemonSet(r.describeDaemonSet)
 		case "<persistent_volume>":
 			f = r.CapturePersistentVolume(r.describePV)
-		case "<persistent_volume_claim>":
-			f = r.CapturePersistentVolumeClaim(r.describePVC)
 		case "<storage_class>":
 			f = r.CaptureStorageClass(r.describeStoragelass)
 		case "<statefulset>":
 			f = r.CaptureStatefulSet(r.describeStatefulSet)
-		case "<volume_snapshot>":
-			f = r.CaptureVolumeSnapshot(r.describeVolumeSnapshot)
-		case "<volume_snapshot_data>":
-			f = r.CaptureVolumeSnapshotData(r.describeVolumeSnapshotData)
 		case "<job>":
 			f = r.CaptureJob(r.describeJob)
 		default:
@@ -259,71 +219,6 @@ func (r *Reporter) CaptureDeployment(f func(xfer.Request, string, string) xfer.R
 			return xfer.ResponseErrorf("Deployment not found: %s", uid)
 		}
 		return f(req, deployment.Namespace(), deployment.Name())
-	}
-}
-
-// CapturePersistentVolumeClaim will return name, namespace and capacity of PVC
-func (r *Reporter) CapturePersistentVolumeClaim(f func(xfer.Request, string, string, string) xfer.Response) func(xfer.Request) xfer.Response {
-	return func(req xfer.Request) xfer.Response {
-		uid, ok := report.ParsePersistentVolumeClaimNodeID(req.NodeID)
-		if !ok {
-			return xfer.ResponseErrorf("Invalid ID: %s", req.NodeID)
-		}
-		// find persistentVolumeClaim by UID
-		var persistentVolumeClaim PersistentVolumeClaim
-		r.client.WalkPersistentVolumeClaims(func(p PersistentVolumeClaim) error {
-			if p.UID() == uid {
-				persistentVolumeClaim = p
-			}
-			return nil
-		})
-		if persistentVolumeClaim == nil {
-			return xfer.ResponseErrorf("Persistent volume claim not found: %s", uid)
-		}
-		return f(req, persistentVolumeClaim.Namespace(), persistentVolumeClaim.Name(), persistentVolumeClaim.GetCapacity())
-	}
-}
-
-// CaptureVolumeSnapshot will return name, pvc name, namespace and capacity of volume snapshot
-func (r *Reporter) CaptureVolumeSnapshot(f func(xfer.Request, string, string, string, string) xfer.Response) func(xfer.Request) xfer.Response {
-	return func(req xfer.Request) xfer.Response {
-		uid, ok := report.ParseVolumeSnapshotNodeID(req.NodeID)
-		if !ok {
-			return xfer.ResponseErrorf("Invalid ID: %s", req.NodeID)
-		}
-		// find volume snapshot by UID
-		var volumeSnapshot VolumeSnapshot
-		r.client.WalkVolumeSnapshots(func(p VolumeSnapshot) error {
-			if p.UID() == uid {
-				volumeSnapshot = p
-			}
-			return nil
-		})
-		if volumeSnapshot == nil {
-			return xfer.ResponseErrorf("Volume snapshot not found: %s", uid)
-		}
-		return f(req, volumeSnapshot.Namespace(), volumeSnapshot.Name(), volumeSnapshot.GetVolumeName(), volumeSnapshot.GetCapacity())
-	}
-}
-
-// CaptureService is exported for testing
-func (r *Reporter) CaptureService(f func(xfer.Request, string, string) xfer.Response) func(xfer.Request) xfer.Response {
-	return func(req xfer.Request) xfer.Response {
-		uid, ok := report.ParseServiceNodeID(req.NodeID)
-		if !ok {
-			return xfer.ResponseErrorf("Invalid ID: %s", req.NodeID)
-		}
-		var service Service
-		r.client.WalkServices(func(s Service) error {
-			if s.UID() == uid {
-				service = s
-			}
-			return nil
-		})
-		if service == nil {
-			return xfer.ResponseErrorf("Service not found: %s", uid)
-		}
-		return f(req, service.Namespace(), service.Name())
 	}
 }
 
@@ -433,28 +328,6 @@ func (r *Reporter) CapturePersistentVolume(f func(xfer.Request, string) xfer.Res
 	}
 }
 
-// CaptureVolumeSnapshotData will return name of volume snapshot data
-func (r *Reporter) CaptureVolumeSnapshotData(f func(xfer.Request, string) xfer.Response) func(xfer.Request) xfer.Response {
-	return func(req xfer.Request) xfer.Response {
-		uid, ok := report.ParseVolumeSnapshotDataNodeID(req.NodeID)
-		if !ok {
-			return xfer.ResponseErrorf("Invalid ID: %s", req.NodeID)
-		}
-		// find volume snapshotData by UID
-		var volumeSnapshotData VolumeSnapshotData
-		r.client.WalkVolumeSnapshotData(func(v VolumeSnapshotData) error {
-			if v.UID() == uid {
-				volumeSnapshotData = v
-			}
-			return nil
-		})
-		if volumeSnapshotData == nil {
-			return xfer.ResponseErrorf("Volume snapshot data not found: %s", uid)
-		}
-		return f(req, volumeSnapshotData.Name())
-	}
-}
-
 // CaptureJob is exported for testing
 func (r *Reporter) CaptureJob(f func(xfer.Request, string, string) xfer.Response) func(xfer.Request) xfer.Response {
 	return func(req xfer.Request) xfer.Response {
@@ -509,28 +382,22 @@ func (r *Reporter) UncordonNode(req xfer.Request, name string) xfer.Response {
 
 func (r *Reporter) registerControls() {
 	controls := map[string]xfer.ControlHandlerFunc{
-		CloneVolumeSnapshot:  r.CaptureVolumeSnapshot(r.cloneVolumeSnapshot),
-		CreateVolumeSnapshot: r.CapturePersistentVolumeClaim(r.createVolumeSnapshot),
-		GetLogs:              r.CapturePod(r.GetLogs),
-		Describe:             r.Describe(),
-		DeletePod:            r.CapturePod(r.deletePod),
-		DeleteVolumeSnapshot: r.CaptureVolumeSnapshot(r.deleteVolumeSnapshot),
-		ScaleUp:              r.CaptureDeployment(r.ScaleUp),
-		ScaleDown:            r.CaptureDeployment(r.ScaleDown),
-		CordonNode:           r.CaptureNode(r.CordonNode),
-		UncordonNode:         r.CaptureNode(r.UncordonNode),
+		GetLogs:      r.CapturePod(r.GetLogs),
+		Describe:     r.Describe(),
+		DeletePod:    r.CapturePod(r.deletePod),
+		ScaleUp:      r.CaptureDeployment(r.ScaleUp),
+		ScaleDown:    r.CaptureDeployment(r.ScaleDown),
+		CordonNode:   r.CaptureNode(r.CordonNode),
+		UncordonNode: r.CaptureNode(r.UncordonNode),
 	}
 	r.handlerRegistry.Batch(nil, controls)
 }
 
 func (r *Reporter) deregisterControls() {
 	controls := []string{
-		CloneVolumeSnapshot,
-		CreateVolumeSnapshot,
 		GetLogs,
 		Describe,
 		DeletePod,
-		DeleteVolumeSnapshot,
 		ScaleUp,
 		ScaleDown,
 		CordonNode,

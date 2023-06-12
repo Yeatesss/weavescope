@@ -5,30 +5,22 @@ import (
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/goji/httpauth"
 	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"github.com/tylerb/graceful"
 
-	billing "github.com/weaveworks/billing-client"
-	"github.com/weaveworks/common/aws"
 	"github.com/weaveworks/common/logging"
 	"github.com/weaveworks/common/middleware"
-	"github.com/weaveworks/common/network"
 	"github.com/weaveworks/common/signals"
 	"github.com/weaveworks/common/tracing"
 	"github.com/weaveworks/scope/app"
-	"github.com/weaveworks/scope/app/multitenant"
 	"github.com/weaveworks/scope/common/weave"
 	"github.com/weaveworks/scope/common/xfer"
 	"github.com/weaveworks/scope/probe/docker"
@@ -39,20 +31,6 @@ const (
 	httpTimeout            = 90 * time.Second
 )
 
-var (
-	requestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: "scope",
-		Name:      "request_duration_seconds",
-		Help:      "Time in seconds spent serving HTTP requests.",
-		Buckets:   prometheus.DefBuckets,
-	}, []string{"method", "route", "status_code", "ws"})
-)
-
-func registerAppMetrics() {
-	prometheus.MustRegister(requestDuration)
-	billing.MustRegisterMetrics()
-}
-
 var registerAppMetricsOnce sync.Once
 
 // Router creates the mux for all the various app components.
@@ -61,7 +39,6 @@ func router(collector app.Collector, controlRouter app.ControlRouter, pipeRouter
 
 	// We pull in the http.DefaultServeMux to get the pprof routes
 	router.PathPrefix("/debug/pprof").Handler(http.DefaultServeMux)
-	router.Path("/metrics").Handler(promhttp.Handler())
 
 	app.RegisterReportPostHandler(collector, router)
 	app.RegisterControlRoutes(router, controlRouter)
@@ -76,10 +53,6 @@ func router(collector app.Collector, controlRouter app.ControlRouter, pipeRouter
 	router.PathPrefix("/").Name("static").Handler(uiHandler)
 
 	middlewares := middleware.Merge(
-		middleware.Instrument{
-			RouteMatcher: router,
-			Duration:     requestDuration,
-		},
 		middleware.Tracer{
 			RouteMatcher: router,
 		},
@@ -88,134 +61,19 @@ func router(collector app.Collector, controlRouter app.ControlRouter, pipeRouter
 	return middlewares.Wrap(router)
 }
 
-func collectorFactory(userIDer multitenant.UserIDer, collectorURL, s3URL string, tickInterval time.Duration, natsHostname string,
-	memcacheConfig multitenant.MemcacheConfig, window time.Duration, maxTopNodes int, createTables bool, collectorAddr string) (app.Collector, error) {
-	if collectorURL == "local" {
-		return app.NewCollector(window), nil
-	}
+func collectorFactory(window time.Duration) (app.Collector, error) {
+	return app.NewCollector(window), nil
 
-	var memcacheClient *multitenant.MemcacheClient
-	if memcacheConfig.Host != "" {
-		memcacheClient = multitenant.NewMemcacheClient(memcacheConfig)
-	}
-	liveConfig := multitenant.LiveCollectorConfig{
-		UserIDer:       userIDer,
-		NatsHost:       natsHostname,
-		MemcacheClient: memcacheClient,
-		Window:         window,
-		TickInterval:   tickInterval,
-		MaxTopNodes:    maxTopNodes,
-		CollectorAddr:  collectorAddr,
-	}
-	if collectorURL == "multitenant-live" {
-		return multitenant.NewLiveCollector(liveConfig)
-	}
-
-	parsed, err := url.Parse(collectorURL)
-	if err != nil {
-		return nil, err
-	}
-
-	switch parsed.Scheme {
-	case "file":
-		return app.NewFileCollector(parsed.Path, window)
-	case "dynamodb":
-		s3, err := url.Parse(s3URL)
-		if err != nil {
-			return nil, fmt.Errorf("Valid URL for s3 required: %v", err)
-		}
-		dynamoDBConfig, err := aws.ConfigFromURL(parsed)
-		if err != nil {
-			return nil, err
-		}
-		s3Config, err := aws.ConfigFromURL(s3)
-		if err != nil {
-			return nil, err
-		}
-		bucketName := strings.TrimPrefix(s3.Path, "/")
-		tableName := strings.TrimPrefix(parsed.Path, "/")
-		s3Store := multitenant.NewS3Client(s3Config, bucketName)
-		awsCollector, err := multitenant.NewAWSCollector(
-			liveConfig,
-			multitenant.AWSCollectorConfig{
-				DynamoDBConfig: dynamoDBConfig,
-				DynamoTable:    tableName,
-				S3Store:        &s3Store,
-			},
-		)
-		if err != nil {
-			return nil, err
-		}
-		if createTables {
-			if err := awsCollector.CreateTables(); err != nil {
-				return nil, err
-			}
-		}
-		return awsCollector, nil
-	}
-
-	return nil, fmt.Errorf("Invalid collector '%s'", collectorURL)
 }
 
-func emitterFactory(collector app.Collector, clientCfg billing.Config, userIDer multitenant.UserIDer, emitterCfg multitenant.BillingEmitterConfig) (*multitenant.BillingEmitter, error) {
-	billingClient, err := billing.NewClient(clientCfg)
-	if err != nil {
-		return nil, err
-	}
-	emitterCfg.UserIDer = userIDer
-	return multitenant.NewBillingEmitter(
-		collector,
-		billingClient,
-		emitterCfg,
-	)
+func controlRouterFactory() (app.ControlRouter, error) {
+	return app.NewLocalControlRouter(), nil
+
 }
 
-func controlRouterFactory(userIDer multitenant.UserIDer, controlRouterURL string, controlRPCTimeout time.Duration) (app.ControlRouter, error) {
-	if controlRouterURL == "local" {
-		return app.NewLocalControlRouter(), nil
-	}
+func pipeRouterFactory() (app.PipeRouter, error) {
+	return app.NewLocalPipeRouter(), nil
 
-	parsed, err := url.Parse(controlRouterURL)
-	if err != nil {
-		return nil, err
-	}
-
-	if parsed.Scheme == "sqs" {
-		prefix := strings.TrimPrefix(parsed.Path, "/")
-		sqsConfig, err := aws.ConfigFromURL(parsed)
-		if err != nil {
-			return nil, err
-		}
-		return multitenant.NewSQSControlRouter(sqsConfig, userIDer, prefix, controlRPCTimeout), nil
-	}
-
-	return nil, fmt.Errorf("Invalid control router '%s'", controlRouterURL)
-}
-
-func pipeRouterFactory(userIDer multitenant.UserIDer, pipeRouterURL, consulInf string) (app.PipeRouter, error) {
-	if pipeRouterURL == "local" {
-		return app.NewLocalPipeRouter(), nil
-	}
-
-	parsed, err := url.Parse(pipeRouterURL)
-	if err != nil {
-		return nil, err
-	}
-
-	if parsed.Scheme == "consul" {
-		consulClient, err := multitenant.NewConsulClient(parsed.Host)
-		if err != nil {
-			return nil, err
-		}
-		advertise, err := network.GetFirstAddressOf(consulInf)
-		if err != nil {
-			return nil, err
-		}
-		addr := fmt.Sprintf("%s:4444", advertise)
-		return multitenant.NewConsulPipeRouter(consulClient, strings.TrimPrefix(parsed.Path, "/"), addr, userIDer), nil
-	}
-
-	return nil, fmt.Errorf("Invalid pipe router '%s'", pipeRouterURL)
 }
 
 // Main runs the app
@@ -228,7 +86,6 @@ func appMain(flags appFlags) {
 		Identity: flags.identity,
 		Insecure: flags.insecure,
 	})
-	registerAppMetricsOnce.Do(registerAppMetrics)
 
 	traceCloser, err := tracing.NewFromEnv(fmt.Sprintf("scope-%s", flags.serviceName))
 	if err != nil {
@@ -244,48 +101,25 @@ func appMain(flags appFlags) {
 	log.Infof("app starting, version %s, ID %s", app.Version, app.UniqueID)
 	logCensoredArgs()
 
-	userIDer := multitenant.NoopUserIDer
-	if flags.userIDHeader != "" {
-		userIDer = multitenant.UserIDHeader(flags.userIDHeader)
-	}
-
 	tickInterval := flags.tickInterval
 	if tickInterval == 0 {
 		tickInterval = flags.storeInterval
 	}
-	collector, err := collectorFactory(
-		userIDer, flags.collectorURL, flags.s3URL, tickInterval, flags.natsHostname,
-		multitenant.MemcacheConfig{
-			Host:             flags.memcachedHostname,
-			Timeout:          flags.memcachedTimeout,
-			Expiration:       flags.memcachedExpiration,
-			UpdateInterval:   memcacheUpdateInterval,
-			Service:          flags.memcachedService,
-			CompressionLevel: flags.memcachedCompressionLevel,
-		},
-		flags.window, flags.maxTopNodes, flags.awsCreateTables, flags.collectorAddr)
+	collector, err := collectorFactory(flags.window)
 	if err != nil {
 		log.Fatalf("Error creating collector: %v", err)
 		return
 	}
 
-	if flags.BillingEmitterConfig.Enabled {
-		billingEmitter, err := emitterFactory(collector, flags.BillingClientConfig, userIDer, flags.BillingEmitterConfig)
-		if err != nil {
-			log.Fatalf("Error creating emitter: %v", err)
-			return
-		}
-		collector = billingEmitter
-	}
 	defer collector.Close()
 
-	controlRouter, err := controlRouterFactory(userIDer, flags.controlRouterURL, flags.controlRPCTimeout)
+	controlRouter, err := controlRouterFactory()
 	if err != nil {
 		log.Fatalf("Error creating control router: %v", err)
 		return
 	}
 
-	pipeRouter, err := pipeRouterFactory(userIDer, flags.pipeRouterURL, flags.consulInf)
+	pipeRouter, err := pipeRouterFactory()
 	if err != nil {
 		log.Fatalf("Error creating pipe router: %v", err)
 		return

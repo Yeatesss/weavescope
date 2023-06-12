@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/armon/go-metrics"
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/go-cleanhttp"
 	log "github.com/sirupsen/logrus"
@@ -310,10 +309,6 @@ func (c *appClient) publish(r io.Reader) error {
 	}
 	defer resp.Body.Close()
 
-	metrics.IncrCounterWithLabels([]string{"publishes"}, 1, []metrics.Label{
-		{Name: "destination", Value: req.Host},
-		{Name: "status", Value: fmt.Sprint(resp.StatusCode)},
-	})
 	if resp.StatusCode != http.StatusOK {
 		text, _ := ioutil.ReadAll(resp.Body)
 		return fmt.Errorf(resp.Status + ": " + string(text))

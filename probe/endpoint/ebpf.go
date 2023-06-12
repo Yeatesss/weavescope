@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package endpoint
@@ -14,7 +15,6 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/armon/go-metrics"
 	log "github.com/sirupsen/logrus"
 	"github.com/weaveworks/common/fs"
 	"github.com/weaveworks/scope/probe/endpoint/procspy"
@@ -83,6 +83,7 @@ type EbpfTracker struct {
 //   - 4.1.2-foo
 //   - 4.1.2-33.44+bar
 //   - etc.
+//
 // For example, on a Ubuntu system the vendor specific release part
 // (after the first `-`) could look like:
 // '<ABI number>.<upload number>-<flavour>' or
@@ -167,7 +168,7 @@ func (t *EbpfTracker) TCPEventV4(e tracer.TcpV4) {
 		debugBPFFile := "/var/run/scope/debug-bpf"
 		b, err := ioutil.ReadFile("/var/run/scope/debug-bpf")
 		if err == nil && strings.TrimSpace(string(b[:])) == "stop" {
-			os.Remove(debugBPFFile)
+			os.RemoveAll(debugBPFFile)
 			log.Warnf("ebpf tracker stopped as requested by user")
 			t.stop()
 			return
@@ -181,9 +182,6 @@ func (t *EbpfTracker) TCPEventV4(e tracer.TcpV4) {
 		// https://github.com/weaveworks/scope/issues/2334
 		log.Errorf("tcp tracer received event with timestamp %v even though the last timestamp was %v. Stopping the eBPF tracker.", e.Timestamp, t.lastTimestampV4)
 		t.stop()
-		metrics.IncrCounterWithLabels([]string{"ebpf", "errors"}, 1, []metrics.Label{
-			{Name: "kind", Value: "timestamp-out-of-order"},
-		})
 		return
 	}
 
@@ -206,9 +204,6 @@ func (t *EbpfTracker) TCPEventV6(e tracer.TcpV6) {
 // LostV4 handles IPv4 TCP event misses from the eBPF tracer.
 func (t *EbpfTracker) LostV4(count uint64) {
 	log.Errorf("tcp tracer lost %d events. Stopping the eBPF tracker", count)
-	metrics.IncrCounterWithLabels([]string{"ebpf", "errors"}, 1, []metrics.Label{
-		{Name: "kind", Value: "lost-events"},
-	})
 	t.stop()
 }
 

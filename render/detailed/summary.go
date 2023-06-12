@@ -7,7 +7,6 @@ import (
 
 	opentracing "github.com/opentracing/opentracing-go"
 
-	"github.com/weaveworks/scope/probe/awsecs"
 	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/probe/overlay"
@@ -79,8 +78,6 @@ var renderers = map[string]func(BasicNodeSummary, report.Node) BasicNodeSummary{
 	report.StatefulSet:           podGroupNodeSummary,
 	report.CronJob:               podGroupNodeSummary,
 	report.Job:                   podGroupNodeSummary,
-	report.ECSTask:               ecsTaskNodeSummary,
-	report.ECSService:            ecsServiceNodeSummary,
 	report.SwarmService:          swarmServiceNodeSummary,
 	report.Host:                  hostNodeSummary,
 	report.Overlay:               weaveNodeSummary,
@@ -88,8 +85,6 @@ var renderers = map[string]func(BasicNodeSummary, report.Node) BasicNodeSummary{
 	report.PersistentVolume:      persistentVolumeNodeSummary,
 	report.PersistentVolumeClaim: persistentVolumeClaimNodeSummary,
 	report.StorageClass:          storageClassNodeSummary,
-	report.VolumeSnapshot:        volumeSnapshotNodeSummary,
-	report.VolumeSnapshotData:    volumeSnapshotDataNodeSummary,
 }
 
 // For each report.Topology, map to a 'primary' API topology. This can then be used in a variety of places.
@@ -104,15 +99,11 @@ var primaryAPITopology = map[string]string{
 	report.CronJob:               "kube-controllers",
 	report.Job:                   "kube-controllers",
 	report.Service:               "services",
-	report.ECSTask:               "ecs-tasks",
-	report.ECSService:            "ecs-services",
 	report.SwarmService:          "swarm-services",
 	report.Host:                  "hosts",
 	report.PersistentVolume:      "pods",
 	report.PersistentVolumeClaim: "pods",
 	report.StorageClass:          "pods",
-	report.VolumeSnapshot:        "pods",
-	report.VolumeSnapshotData:    "pods",
 }
 
 // MakeBasicNodeSummary returns a basic summary of a node, if
@@ -340,20 +331,6 @@ func podGroupNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary 
 	return base
 }
 
-func ecsTaskNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
-	base.Label, _ = n.Latest.Lookup(awsecs.TaskFamily)
-	if base.Label == "" {
-		base.Label, _ = report.ParseECSTaskNodeID(n.ID)
-	}
-	return base
-}
-
-func ecsServiceNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
-	_, base.Label, _ = report.ParseECSServiceNodeID(n.ID)
-	base.Stack = true
-	return base
-}
-
 func swarmServiceNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
 	base.Label, _ = n.Latest.Lookup(docker.ServiceName)
 	if base.Label == "" {
@@ -400,16 +377,6 @@ func persistentVolumeClaimNodeSummary(base BasicNodeSummary, n report.Node) Basi
 }
 
 func storageClassNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
-	base = addKubernetesLabelAndRank(base, n)
-	return base
-}
-
-func volumeSnapshotNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
-	base = addKubernetesLabelAndRank(base, n)
-	return base
-}
-
-func volumeSnapshotDataNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
 	base = addKubernetesLabelAndRank(base, n)
 	return base
 }

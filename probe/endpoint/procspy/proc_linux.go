@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/armon/go-metrics"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/weaveworks/common/fs"
@@ -266,7 +265,6 @@ func (w pidWalker) walk(buf *bytes.Buffer) (map[uint64]*Proc, error) {
 		}
 	}
 
-	metrics.SetGauge(namespaceKey, float32(len(namespaces)))
 	return sockets, nil
 }
 

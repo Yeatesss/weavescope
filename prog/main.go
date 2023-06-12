@@ -17,9 +17,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	billing "github.com/weaveworks/billing-client"
 	"github.com/weaveworks/scope/app"
-	"github.com/weaveworks/scope/app/multitenant"
 	"github.com/weaveworks/scope/common/xfer"
 	"github.com/weaveworks/scope/probe/appclient"
 	"github.com/weaveworks/scope/probe/host"
@@ -139,10 +137,6 @@ type probeFlags struct {
 	kubernetesNodeName     string
 	kubernetesClientConfig kubernetes.ClientConfig
 
-	ecsEnabled       bool
-	ecsCacheSize     int
-	ecsCacheExpiry   time.Duration
-	ecsClusterRegion string
 	collectorAddress string
 	weaveEnabled     bool
 	weaveAddr        string
@@ -173,7 +167,6 @@ type appFlags struct {
 	containerName  string
 	dockerEndpoint string
 
-	collectorURL              string // how collector talks to backing store (or "local" if none)
 	collectorAddr             string // how to find collectors if deployed as microservices
 	s3URL                     string
 	storeInterval             time.Duration
@@ -196,9 +189,6 @@ type appFlags struct {
 
 	awsCreateTables bool
 	consulInf       string
-
-	multitenant.BillingEmitterConfig
-	BillingClientConfig billing.Config
 }
 
 type containerLabelFiltersFlag struct {
@@ -360,11 +350,6 @@ func setupFlags(flags *flags) {
 	flag.StringVar(&flags.probe.kubernetesClientConfig.User, "probe.kubernetes.user", "", "The name of the kubeconfig user to use")
 	flag.StringVar(&flags.probe.kubernetesClientConfig.Username, "probe.kubernetes.username", "", "Username for basic authentication to the API server")
 	flag.StringVar(&flags.probe.kubernetesNodeName, "probe.kubernetes.node-name", "", "Name of this node, for filtering pods")
-	// AWS ECS
-	flag.BoolVar(&flags.probe.ecsEnabled, "probe.ecs", false, "Collect ecs-related attributes for containers on this node")
-	flag.IntVar(&flags.probe.ecsCacheSize, "probe.ecs.cache.size", 1024*1024, "Max size of cached info for each ECS cluster")
-	flag.DurationVar(&flags.probe.ecsCacheExpiry, "probe.ecs.cache.expiry", time.Hour, "How long to keep cached ECS info")
-	flag.StringVar(&flags.probe.ecsClusterRegion, "probe.ecs.cluster.region", "", "ECS Cluster Region")
 
 	// Weave
 	flag.StringVar(&flags.probe.weaveAddr, "probe.weave.addr", "127.0.0.1:6784", "IP address & port of the Weave router")
@@ -395,7 +380,6 @@ func setupFlags(flags *flags) {
 	flag.Var(&flags.containerLabelFilterFlags, "app.container-label-filter", "Add container label-based view filter, specified as title:label. Multiple flags are accepted. Example: --app.container-label-filter='Database Containers:role=db'")
 	flag.Var(&flags.containerLabelFilterFlagsExclude, "app.container-label-filter-exclude", "Add container label-based view filter that excludes containers with the given label, specified as title:label. Multiple flags are accepted. Example: --app.container-label-filter-exclude='Database Containers:role=db'")
 
-	flag.StringVar(&flags.app.collectorURL, "app.collector", "local", "Collector to use (local, multitenant-live, dynamodb, or file/directory)")
 	flag.StringVar(&flags.app.collectorAddr, "app.collector-addr", "", "Address to look up collectors when deployed as microservices")
 	flag.StringVar(&flags.app.s3URL, "app.collector.s3", "local", "S3 URL to use (when collector is dynamodb)")
 	flag.DurationVar(&flags.app.storeInterval, "app.collector.store-interval", 0, "How often to store merged incoming reports.")
@@ -424,8 +408,6 @@ func main() {
 
 	flags := flags{}
 	setupFlags(&flags)
-	flags.app.BillingEmitterConfig.RegisterFlags(flag.CommandLine)
-	flags.app.BillingClientConfig.RegisterFlags(flag.CommandLine)
 	flag.Parse()
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
 	//flags.probe.userid = "2222222"

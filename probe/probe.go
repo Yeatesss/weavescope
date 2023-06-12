@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/armon/go-metrics"
 	log "github.com/sirupsen/logrus"
 	"github.com/weaveworks/common/mtime"
 	"golang.org/x/time/rate"
@@ -151,12 +150,7 @@ func (p *Probe) spyLoop() {
 
 func (p *Probe) tick() {
 	for _, ticker := range p.tickers {
-		t := time.Now()
 		err := ticker.Tick()
-		metrics.MeasureSinceWithLabels([]string{"duration", "seconds"}, t, []metrics.Label{
-			{Name: "operation", Value: "ticker"},
-			{Name: "module", Value: ticker.Name()},
-		})
 		if err != nil {
 			log.Errorf("Error doing ticker: %v", err)
 		}
@@ -173,10 +167,6 @@ func (p *Probe) report() report.Report {
 			if !timer.Stop() {
 				log.Warningf("%v reporter took %v (longer than %v)", rep.Name(), time.Now().Sub(t), p.spyInterval)
 			}
-			metrics.MeasureSinceWithLabels([]string{"duration", "seconds"}, t, []metrics.Label{
-				{Name: "operation", Value: "reporter"},
-				{Name: "module", Value: rep.Name()},
-			})
 			if err != nil {
 				log.Errorf("Error generating %s report: %v", rep.Name(), err)
 				newReport = report.MakeReport() // empty is OK to merge
@@ -202,10 +192,6 @@ func (p *Probe) tag(r report.Report) report.Report {
 		if !timer.Stop() {
 			log.Warningf("%v tagger took %v (longer than %v)", tagger.Name(), time.Now().Sub(t), p.spyInterval)
 		}
-		metrics.MeasureSinceWithLabels([]string{"duration", "seconds"}, t, []metrics.Label{
-			{Name: "operation", Value: "tagger"},
-			{Name: "module", Value: tagger.Name()},
-		})
 		if err != nil {
 			log.Errorf("Error applying tagger: %v", err)
 		}

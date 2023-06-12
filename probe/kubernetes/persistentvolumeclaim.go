@@ -74,8 +74,7 @@ func (p *persistentVolumeClaim) GetNode(probeID string) report.Node {
 	}
 
 	return p.MetaNode(report.MakePersistentVolumeClaimNodeID(p.UID())).
-		WithLatests(latests).
-		WithLatestActiveControls(CreateVolumeSnapshot, Describe)
+		WithLatests(latests)
 }
 
 // Selector returns all Persistent Volume Claim selector

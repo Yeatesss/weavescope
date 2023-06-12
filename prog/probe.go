@@ -16,9 +16,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/armon/go-metrics"
-	metrics_prom "github.com/armon/go-metrics/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/weaveworks/common/logging"
@@ -31,7 +28,6 @@ import (
 	"github.com/weaveworks/scope/common/xfer"
 	"github.com/weaveworks/scope/probe"
 	"github.com/weaveworks/scope/probe/appclient"
-	"github.com/weaveworks/scope/probe/awsecs"
 	"github.com/weaveworks/scope/probe/controls"
 	"github.com/weaveworks/scope/probe/cri"
 	"github.com/weaveworks/scope/probe/docker"
@@ -59,9 +55,6 @@ func checkNewScopeVersion(flags probeFlags) {
 	if flags.kubernetesEnabled {
 		checkpointFlags["kubernetes_enabled"] = "true"
 	}
-	if flags.ecsEnabled {
-		checkpointFlags["ecs_enabled"] = "true"
-	}
 
 	//go func() {
 	//	handleResponse := func(r *checkpoint.CheckResponse, err error) {
@@ -88,7 +81,6 @@ func checkNewScopeVersion(flags probeFlags) {
 func maybeExportProfileData(flags probeFlags) {
 	if flags.httpListen != "" {
 		go func() {
-			http.Handle("/metrics", promhttp.Handler())
 			log.Infof("Profiling data being exported to %s", flags.httpListen)
 			log.Infof("go tool pprof http://%s/debug/pprof/{profile,heap,block}", flags.httpListen)
 			log.Infof("Profiling endpoint %s terminated: %v", flags.httpListen, http.ListenAndServe(flags.httpListen, nil))
@@ -127,24 +119,6 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		defer traceCloser.Close()
 	}
 
-	cfg := &metrics.Config{
-		ServiceName:      "scope-probe",
-		TimerGranularity: time.Second,
-		FilterDefault:    true, // Don't filter metrics by default
-	}
-	if flags.httpListen == "" {
-		// Setup in memory metrics sink
-		inm := metrics.NewInmemSink(time.Minute, 2*time.Minute)
-		sig := metrics.DefaultInmemSignal(inm)
-		defer sig.Stop()
-		metrics.NewGlobal(cfg, inm)
-	} else {
-		sink, err := metrics_prom.NewPrometheusSink()
-		if err != nil {
-			log.Fatalf("Failed to create Prometheus metrics sink: %v", err)
-		}
-		metrics.NewGlobal(cfg, sink)
-	}
 	logCensoredArgs()
 	defer log.Info("probe exiting")
 
@@ -370,13 +344,6 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	if flags.kubernetesEnabled {
 		tagger := kubernetes.NewTagger(hostID)
 		p.AddTagger(&tagger)
-	}
-
-	if flags.ecsEnabled {
-		reporter := awsecs.Make(flags.ecsCacheSize, flags.ecsCacheExpiry, flags.ecsClusterRegion, handlerRegistry, probeID)
-		defer reporter.Stop()
-		p.AddReporter(reporter)
-		p.AddTagger(reporter)
 	}
 
 	if flags.weaveEnabled {

@@ -31,14 +31,10 @@ const (
 	UnuseImage            = "unuse_image"
 	Host                  = "host"
 	Overlay               = "overlay"
-	ECSService            = "ecs_service"
-	ECSTask               = "ecs_task"
 	SwarmService          = "swarm_service"
 	PersistentVolume      = "persistent_volume"
 	PersistentVolumeClaim = "persistent_volume_claim"
 	StorageClass          = "storage_class"
-	VolumeSnapshot        = "volume_snapshot"
-	VolumeSnapshotData    = "volume_snapshot_data"
 	Job                   = "job"
 
 	// Shapes used for different nodes
@@ -77,14 +73,10 @@ var topologyNames = []string{
 	Namespace,
 	Host,
 	Overlay,
-	ECSTask,
-	ECSService,
 	SwarmService,
 	PersistentVolume,
 	PersistentVolumeClaim,
 	StorageClass,
-	VolumeSnapshot,
-	VolumeSnapshotData,
 	Job,
 }
 
@@ -162,15 +154,6 @@ type Report struct {
 	// probes with each published report. Edges are not present.
 	Host Topology
 
-	// ECS Task nodes are AWS ECS tasks, which represent a group of containers.
-	// Metadata is limited for now, more to come later. Edges are not present.
-	ECSTask Topology
-
-	// ECS Service nodes are AWS ECS services, which represent a specification for a
-	// desired count of tasks with a task definition template.
-	// Metadata is limited for now, more to come later. Edges are not present.
-	ECSService Topology
-
 	// Swarm Service nodes are Docker Swarm services, which represent a specification for a
 	// group of tasks (either one per host, or a desired count).
 	// Edges are not present.
@@ -192,12 +175,6 @@ type Report struct {
 	// Storage Class represent all kubernetes Storage Classes on hosts running probes.
 	// Metadata is limited for now, more to come later.
 	StorageClass Topology
-
-	// VolumeSnapshot represent all Kubernetes Volume Snapshots on hosts running probes.
-	VolumeSnapshot Topology
-
-	// VolumeSnapshotData represent all Kubernetes Volume Snapshot Data on hosts running probes.
-	VolumeSnapshotData Topology
 
 	// Job represent all Kubernetes Job on hosts running probes.
 	Job Topology
@@ -289,14 +266,6 @@ func MakeReport() Report {
 			WithShape(Circle).
 			WithLabel("peer", "peers"),
 
-		ECSTask: MakeTopology().
-			WithShape(Heptagon).
-			WithLabel("task", "tasks"),
-
-		ECSService: MakeTopology().
-			WithShape(Heptagon).
-			WithLabel("service", "services"),
-
 		SwarmService: MakeTopology().
 			WithShape(Heptagon).
 			WithLabel("service", "services"),
@@ -312,16 +281,6 @@ func MakeReport() Report {
 		StorageClass: MakeTopology().
 			WithShape(StorageSheet).
 			WithLabel("storage class", "storage classes"),
-
-		VolumeSnapshot: MakeTopology().
-			WithShape(DottedCylinder).
-			WithTag(Camera).
-			WithLabel("volume snapshot", "volume snapshots"),
-
-		VolumeSnapshotData: MakeTopology().
-			WithShape(Cylinder).
-			WithTag(Camera).
-			WithLabel("volume snapshot data", "volume snapshot data"),
 
 		Job: MakeTopology().
 			WithShape(DottedTriangle).
@@ -478,10 +437,6 @@ func (r *Report) topology(name string) *Topology {
 		return &r.Host
 	case Overlay:
 		return &r.Overlay
-	case ECSTask:
-		return &r.ECSTask
-	case ECSService:
-		return &r.ECSService
 	case SwarmService:
 		return &r.SwarmService
 	case PersistentVolume:
@@ -490,10 +445,6 @@ func (r *Report) topology(name string) *Topology {
 		return &r.PersistentVolumeClaim
 	case StorageClass:
 		return &r.StorageClass
-	case VolumeSnapshot:
-		return &r.VolumeSnapshot
-	case VolumeSnapshotData:
-		return &r.VolumeSnapshotData
 	case Job:
 		return &r.Job
 	}

@@ -5,7 +5,6 @@ import (
 
 	"github.com/ugorji/go/codec"
 
-	"github.com/weaveworks/scope/probe/awsecs"
 	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/probe/process"
@@ -151,15 +150,6 @@ var nodeSummaryGroupSpecs = []struct {
 		},
 	},
 	{
-		topologyID: report.ECSTask,
-		NodeSummaryGroup: NodeSummaryGroup{
-			Label: "Tasks",
-			Columns: []Column{
-				{ID: awsecs.CreatedAt, Label: "Created At", Datatype: report.DateTime},
-			},
-		},
-	},
-	{
 		topologyID: report.Container,
 		NodeSummaryGroup: NodeSummaryGroup{
 			Label: "Containers",
@@ -205,20 +195,6 @@ var nodeSummaryGroupSpecs = []struct {
 		topologyID: report.StorageClass,
 		NodeSummaryGroup: NodeSummaryGroup{
 			Label:   "Storage Classes",
-			Columns: []Column{},
-		},
-	},
-	{
-		topologyID: report.VolumeSnapshot,
-		NodeSummaryGroup: NodeSummaryGroup{
-			Label:   "Volume Snapshots",
-			Columns: []Column{},
-		},
-	},
-	{
-		topologyID: report.VolumeSnapshotData,
-		NodeSummaryGroup: NodeSummaryGroup{
-			Label:   "Volume Snapshot Data",
 			Columns: []Column{},
 		},
 	},

@@ -21,8 +21,6 @@ var parentTopologies = []string{
 	report.StatefulSet,
 	report.CronJob,
 	report.Service,
-	report.ECSTask,
-	report.ECSService,
 	report.SwarmService,
 	report.Host,
 }

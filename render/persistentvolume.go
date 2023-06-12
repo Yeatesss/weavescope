@@ -13,8 +13,6 @@ var KubernetesVolumesRenderer = MakeReduce(
 	VolumesRenderer,
 	PodToVolumeRenderer,
 	PVCToStorageClassRenderer,
-	PVToSnapshotRenderer,
-	VolumeSnapshotRenderer,
 )
 
 // VolumesRenderer is a Renderer which produces a renderable kubernetes PV & PVC
@@ -95,54 +93,6 @@ func (v pvcToStorageClassRenderer) Render(ctx context.Context, rpt report.Report
 			}
 		}
 		nodes[scID] = scNode
-	}
-	return Nodes{Nodes: nodes}
-}
-
-//PVToSnapshotRenderer is a Renderer which produces a renderable kubernetes PV
-var PVToSnapshotRenderer = pvToSnapshotRenderer{}
-
-//pvToSnapshotRenderer is a Renderer to render PV & Snapshot.
-type pvToSnapshotRenderer struct{}
-
-//Render renders the PV & Snapshot nodes with adjacency.
-func (v pvToSnapshotRenderer) Render(ctx context.Context, rpt report.Report) Nodes {
-	nodes := make(report.Nodes)
-	for pvNodeID, p := range rpt.PersistentVolume.Nodes {
-		volumeName, _ := p.Latest.Lookup(report.KubernetesName)
-		for _, volumeSnapshotNode := range rpt.VolumeSnapshot.Nodes {
-			snapshotPVName, _ := volumeSnapshotNode.Latest.Lookup(report.KubernetesVolumeName)
-			if volumeName == snapshotPVName {
-				p.Adjacency = p.Adjacency.Add(volumeSnapshotNode.ID)
-				p.Children = p.Children.Add(volumeSnapshotNode)
-			}
-		}
-		nodes[pvNodeID] = p
-	}
-	return Nodes{Nodes: nodes}
-}
-
-// VolumeSnapshotRenderer is a renderer which produces a renderable Kubernetes Volume Snapshot and Volume Snapshot Data
-var VolumeSnapshotRenderer = volumeSnapshotRenderer{}
-
-// volumeSnapshotRenderer is a render to volume snapshot & volume snapshot data
-type volumeSnapshotRenderer struct{}
-
-// Render renders the volumeSnapshots & volumeSnapshotData with adjacency
-// It checks for the volumeSnapshotData name in volumeSnapshot, adjacency is created by matching the volumeSnapshotData name.
-func (v volumeSnapshotRenderer) Render(ctx context.Context, rpt report.Report) Nodes {
-	nodes := make(report.Nodes)
-	for volumeSnapshotID, volumeSnapshotNode := range rpt.VolumeSnapshot.Nodes {
-		snapshotData, _ := volumeSnapshotNode.Latest.Lookup(report.KubernetesSnapshotData)
-		for volumeSnapshotDataID, volumeSnapshotDataNode := range rpt.VolumeSnapshotData.Nodes {
-			snapshotDataName, _ := volumeSnapshotDataNode.Latest.Lookup(report.KubernetesName)
-			if snapshotDataName == snapshotData {
-				volumeSnapshotNode.Adjacency = volumeSnapshotNode.Adjacency.Add(volumeSnapshotDataNode.ID)
-				volumeSnapshotNode.Children = volumeSnapshotNode.Children.Add(volumeSnapshotDataNode)
-			}
-			nodes[volumeSnapshotDataID] = volumeSnapshotDataNode
-		}
-		nodes[volumeSnapshotID] = volumeSnapshotNode
 	}
 	return Nodes{Nodes: nodes}
 }
