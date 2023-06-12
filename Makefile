@@ -72,7 +72,8 @@ $(CLOUD_AGENT_EXPORT): docker/Dockerfile.cloud-agent docker/$(SCOPE_EXE) docker/
 $(SCOPE_EXPORT): docker/Dockerfile.scope $(CLOUD_AGENT_EXPORT) docker/$(RUNSVINIT) docker/run-app docker/run-probe docker/entrypoint.sh
 
 $(RUNSVINIT): vendor/github.com/peterbourgon/runsvinit/*.go
-
+ADD_BPFH:
+	cp -r include vendor/github.com/iovisor/gobpf/elf
 $(SCOPE_EXE): $(shell find ./ -path ./vendor -prune -o -type f -name '*.go') prog/staticui/staticui.go prog/externalui/externalui.go $(CODECGEN_TARGETS)
 
 report/report.codecgen.go: $(call GET_CODECGEN_DEPS,report/)
@@ -94,7 +95,7 @@ $(SCOPE_EXE) $(RUNSVINIT) lint tests shell prog/staticui/staticui.go prog/extern
 		-e HOME=/go/src/github.com/weaveworks/scope \
 		-e GOARCH -e GOOS -e CIRCLECI -e CIRCLE_BUILD_NUM -e CIRCLE_NODE_TOTAL \
 		-e CIRCLE_NODE_INDEX -e COVERDIR -e SLOW -e TESTDIRS \
-		$(SCOPE_BACKEND_BUILD_IMAGE):1.3-edb222c7-WIP SCOPE_VERSION=$(SCOPE_VERSION) CODECGEN_UID=$(CODECGEN_UID) $@
+		$(SCOPE_BACKEND_BUILD_IMAGE):$(IMAGE_TAG) SCOPE_VERSION=$(SCOPE_VERSION) CODECGEN_UID=$(CODECGEN_UID) $@
 
 else
 
@@ -201,6 +202,7 @@ client/build-external/index.html: $(SCOPE_UI_TOOLCHAIN_UPTODATE)
 endif
 
 $(SCOPE_BACKEND_BUILD_UPTODATE): backend/*
+	@echo "build code"
 	$(SUDO) docker build -t $(SCOPE_BACKEND_BUILD_IMAGE) backend
 	$(SUDO) docker tag $(SCOPE_BACKEND_BUILD_IMAGE) $(SCOPE_BACKEND_BUILD_IMAGE):$(IMAGE_TAG)
 	touch $@

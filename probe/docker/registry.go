@@ -1,10 +1,7 @@
 package docker
 
 import (
-	"fmt"
-	jsoniter "github.com/json-iterator/go"
-	"io"
-	"os"
+	common_controls "github.com/weaveworks/scope/common/controls"
 	"sync"
 	"time"
 
@@ -71,6 +68,7 @@ type registry struct {
 	usedImages      map[string]docker_client.APIImages
 	networks        []docker_client.Network
 	pipeIDToexecID  map[string]string
+	controlChannel  chan *common_controls.ControlAction
 }
 
 // Client interface for mocking.
@@ -114,6 +112,7 @@ type RegistryOptions struct {
 	DockerEndpoint         string
 	NoCommandLineArguments bool
 	NoEnvironmentVariables bool
+	ControlActions         chan *common_controls.ControlAction
 }
 
 // NewRegistry returns a usable Registry. Don't forget to Stop it.
@@ -124,12 +123,11 @@ func NewRegistry(options RegistryOptions) (Registry, error) {
 	}
 
 	r := &registry{
-		containers:      radix.New(),
-		containersByPID: map[int]Container{},
-		images:          map[string]docker_client.APIImages{},
-		usedImages:      map[string]docker_client.APIImages{},
-		pipeIDToexecID:  map[string]string{},
-
+		containers:             radix.New(),
+		containersByPID:        map[int]Container{},
+		images:                 map[string]docker_client.APIImages{},
+		usedImages:             map[string]docker_client.APIImages{},
+		pipeIDToexecID:         map[string]string{},
 		client:                 client,
 		pipes:                  options.Pipes,
 		interval:               options.Interval,
@@ -139,6 +137,7 @@ func NewRegistry(options RegistryOptions) (Registry, error) {
 		quit:                   make(chan chan struct{}),
 		noCommandLineArguments: options.NoCommandLineArguments,
 		noEnvironmentVariables: options.NoEnvironmentVariables,
+		controlChannel:         options.ControlActions,
 	}
 
 	r.registerControls()
@@ -148,7 +147,7 @@ func NewRegistry(options RegistryOptions) (Registry, error) {
 
 // Stop stops the Docker registry's event subscriber.
 func (r *registry) Stop() {
-	r.deregisterControls()
+	//r.deregisterControls()
 	ch := make(chan struct{})
 	r.quit <- ch
 	<-ch
@@ -459,27 +458,12 @@ func (r *registry) GetContainerImage(id string) (docker_client.APIImages, bool) 
 func (r *registry) WalkImages(f func(docker_client.APIImages)) {
 	r.RLock()
 	defer r.RUnlock()
-	fl, err := os.OpenFile(fmt.Sprintf("%d-image.log", time.Now().Hour()), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return
-	}
-	defer fl.Close()
-	os.Remove(fmt.Sprintf("%d-image.log", time.Now().Add(-1*time.Hour).Hour()))
-	io.WriteString(fl, "full_images\n")
 
-	for _, image := range r.images {
-		a, _ := jsoniter.MarshalToString(image.RepoTags)
-		io.WriteString(fl, fmt.Sprintf("%s:%s\n", image.ID, a))
-
-	}
 	r.usedImages = make(map[string]docker_client.APIImages)
 	// Loop over containers so we only emit images for running containers.
 	r.containers.Walk(func(_ string, c interface{}) bool {
 		image, ok := r.images[c.(Container).Image()]
 		if ok {
-			a, _ := jsoniter.MarshalToString(image.RepoTags)
-			io.WriteString(fl, fmt.Sprintf("useimage:%s:%s\n", image.ID, a))
-
 			r.usedImages[c.(Container).Image()] = image
 			f(image)
 		}
@@ -496,9 +480,6 @@ func (r *registry) WalkUnusedImages(f func(docker_client.APIImages)) {
 	for image, val := range r.images {
 		_, ok := r.usedImages[image]
 		if !ok {
-			a, _ := jsoniter.MarshalToString(val.RepoTags)
-			wlog(fmt.Sprintf("unseimage:%s:%s\n", val.ID, a))
-
 			f(val)
 		}
 	}
@@ -512,14 +493,4 @@ func (r *registry) WalkNetworks(f func(docker_client.Network)) {
 	for _, network := range r.networks {
 		f(network)
 	}
-}
-
-func wlog(data string) {
-	fl, err := os.OpenFile(fmt.Sprintf("%d-image.log", time.Now().Hour()), os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	if err != nil {
-		return
-	}
-	defer fl.Close()
-	io.WriteString(fl, data)
-
 }

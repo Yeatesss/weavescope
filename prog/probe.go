@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/mux"
 	uuid2 "github.com/pborman/uuid"
 	"github.com/tylerb/graceful"
+	common_controls "github.com/weaveworks/scope/common/controls"
 	"github.com/weaveworks/scope/tools/vars"
 	"math/rand"
 	"net"
@@ -91,8 +92,9 @@ func maybeExportProfileData(flags probeFlags) {
 // Main runs the probe
 func probeMain(flags probeFlags, targets []appclient.Target) {
 	var (
-		hostId = os.Getenv("PROBE_HOSTID")
-		uuid   []byte
+		hostId     = os.Getenv("PROBE_HOSTID")
+		uuid       []byte
+		controlMap = make(map[string]chan *common_controls.ControlAction)
 	)
 	fmt.Println("Control Collection Addr:", os.Getenv("RESOURCE_COLLECTION_ADDR"))
 
@@ -295,6 +297,8 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 				log.Errorf("Docker: problem with bridge %s: %v", flags.dockerBridge, err)
 			}
 		}
+		dockerControlActions := make(chan *common_controls.ControlAction, 10)
+		controlMap["docker"] = dockerControlActions
 		options := docker.RegistryOptions{
 			Interval:               flags.dockerInterval,
 			Pipes:                  clients,
@@ -303,6 +307,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 			HandlerRegistry:        handlerRegistry,
 			NoCommandLineArguments: flags.noCommandLineArguments,
 			NoEnvironmentVariables: flags.noEnvironmentVariables,
+			ControlActions:         dockerControlActions,
 		}
 		if registry, err := docker.NewRegistry(options); err == nil {
 			defer registry.Stop()
@@ -379,7 +384,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	//}
 
 	maybeExportProfileData(flags)
-	go httpServer(clients)
+	go httpServer(clients, controlMap)
 
 	p.Start()
 
@@ -392,10 +397,10 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 func httpServer(client interface {
 	probe.ReportPublisher
 	controls.PipeClient
-}) {
+}, controlMap map[string]chan *common_controls.ControlAction) {
 	logger := logging.Logrus(log.StandardLogger())
 	router := mux.NewRouter().SkipClean(true)
-	probe.RegisterRedirectReportPostHandler(router, client)
+	probe.RegisterRedirectReportPostHandler(router, client, controlMap)
 
 	server := &graceful.Server{
 		// we want to manage the stop condition ourselves below

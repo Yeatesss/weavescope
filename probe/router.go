@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"github.com/gorilla/mux"
 	"github.com/opentracing/opentracing-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/ugorji/go/codec"
+	common_controls "github.com/weaveworks/scope/common/controls"
 	"github.com/weaveworks/scope/probe/controls"
 	"github.com/weaveworks/scope/report"
 	"io"
@@ -54,7 +56,7 @@ func requestContextDecorator(f CtxHandlerFunc) http.HandlerFunc {
 func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 	ReportPublisher
 	controls.PipeClient
-}) {
+}, controlMap map[string]chan *common_controls.ControlAction) {
 	post := router.Methods("POST").Subrouter()
 	post.HandleFunc("/api/redirect-report", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 		var (
@@ -88,4 +90,60 @@ func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
+	if control, ok := controlMap["docker"]; ok {
+		post.HandleFunc("/api/docker-container/pause", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+			var ids = struct {
+				ContainerId string `json:"container_id"`
+			}{}
+			err := json.NewDecoder(r.Body).Decode(&ids)
+			if err != nil {
+				log.Error("pause container fail:", err)
+				return
+			}
+			controlResp := make(chan interface{}, 1)
+			defer close(controlResp)
+			control <- &common_controls.ControlAction{
+				Type:   "container",
+				Action: "pause",
+				ID:     ids.ContainerId,
+				Resp:   controlResp,
+			}
+			for resp := range controlResp {
+				if resp == nil {
+					w.WriteHeader(http.StatusOK)
+					return
+				} else {
+					respondWith(ctx, w, http.StatusInternalServerError, resp)
+					return
+				}
+			}
+		}))
+		post.HandleFunc("/api/docker-container/unpause", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+			var ids = struct {
+				ContainerId string `json:"container_id"`
+			}{}
+			err := json.NewDecoder(r.Body).Decode(&ids)
+			if err != nil {
+				log.Error("unpause container fail:", err)
+				return
+			}
+			controlResp := make(chan interface{}, 1)
+			defer close(controlResp)
+			control <- &common_controls.ControlAction{
+				Type:   "container",
+				Action: "unpause",
+				ID:     ids.ContainerId,
+				Resp:   controlResp,
+			}
+			for resp := range controlResp {
+				if resp == nil {
+					w.WriteHeader(http.StatusOK)
+					return
+				} else {
+					respondWith(ctx, w, http.StatusInternalServerError, resp)
+					return
+				}
+			}
+		}))
+	}
 }
