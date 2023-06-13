@@ -47,7 +47,7 @@ require (
 	github.com/weaveworks/common v0.0.0-20200310113808-2708ba4e60a4
 	github.com/weaveworks/ps v0.0.0-20160725183535-70d17b2d6f76
 	github.com/weaveworks/tcptracer-bpf v0.0.0-20200114145059-84a08fc667c0
-	github.com/weaveworks/weave v2.3.1-0.20180427133448-4da998ab4507+incompatible
+	github.com/weaveworks/weave v2.6.4+incompatible
 	github.com/willdonnelly/passwd v0.0.0-20141013001024-7935dab3074c
 	golang.org/x/net v0.7.0
 	golang.org/x/sys v0.8.0

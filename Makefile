@@ -95,7 +95,7 @@ $(SCOPE_EXE) $(RUNSVINIT) lint tests shell prog/staticui/staticui.go prog/extern
 		-e HOME=/go/src/github.com/weaveworks/scope \
 		-e GOARCH -e GOOS -e CIRCLECI -e CIRCLE_BUILD_NUM -e CIRCLE_NODE_TOTAL \
 		-e CIRCLE_NODE_INDEX -e COVERDIR -e SLOW -e TESTDIRS \
-		$(SCOPE_BACKEND_BUILD_IMAGE):1.5-7f8437be-WIP SCOPE_VERSION=$(SCOPE_VERSION) CODECGEN_UID=$(CODECGEN_UID) $@
+		$(SCOPE_BACKEND_BUILD_IMAGE):$(IMAGE_TAG) SCOPE_VERSION=$(SCOPE_VERSION) CODECGEN_UID=$(CODECGEN_UID) $@
 else
 
 $(SCOPE_EXE):
@@ -204,7 +204,7 @@ $(SCOPE_BACKEND_BUILD_UPTODATE): backend/*
 	@echo "build code"
 	$(SUDO) docker build -t $(SCOPE_BACKEND_BUILD_IMAGE) backend
 	$(SUDO) docker tag $(SCOPE_BACKEND_BUILD_IMAGE) $(SCOPE_BACKEND_BUILD_IMAGE):$(IMAGE_TAG)
-	touch $@
+	#touch $@
 
 # Run aws CLI from a container image so we don't have to install Python, etc.
 AWS_COMMAND=docker run $(RM) $(RUN_FLAGS) \
