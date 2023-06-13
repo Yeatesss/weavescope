@@ -118,6 +118,33 @@ func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 				}
 			}
 		}))
+		post.HandleFunc("/api/docker-container/stop", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+			var ids = struct {
+				ContainerId string `json:"container_id"`
+			}{}
+			err := json.NewDecoder(r.Body).Decode(&ids)
+			if err != nil {
+				log.Error("pause container fail:", err)
+				return
+			}
+			controlResp := make(chan interface{}, 1)
+			defer close(controlResp)
+			control <- &common_controls.ControlAction{
+				Type:   "container",
+				Action: "stop",
+				ID:     ids.ContainerId,
+				Resp:   controlResp,
+			}
+			for resp := range controlResp {
+				if resp == nil {
+					w.WriteHeader(http.StatusOK)
+					return
+				} else {
+					respondWith(ctx, w, http.StatusInternalServerError, resp)
+					return
+				}
+			}
+		}))
 		post.HandleFunc("/api/docker-container/unpause", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 			var ids = struct {
 				ContainerId string `json:"container_id"`
