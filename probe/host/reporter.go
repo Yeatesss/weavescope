@@ -204,7 +204,7 @@ func (r *Reporter) Report() (report.Report, error) {
 				Add(LocalNetworks, report.MakeStringSet(localCIDRs...)),
 			).
 			WithMetrics(metrics).
-			WithLatest("cluster_uuid", mtime.Now(), string(uuid)),
+			WithLatest("cluster_uuid", mtime.Now(), string(uuid)).WithLatestActiveControls(ExecHost),
 	)
 
 	return rep, nil
