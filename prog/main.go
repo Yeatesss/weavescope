@@ -95,6 +95,7 @@ type flags struct {
 }
 
 type probeFlags struct {
+	customNodeSku          bool
 	printOnStdout          bool
 	hostId                 string
 	userid                 string
@@ -293,6 +294,7 @@ func setupFlags(flags *flags) {
 	flag.Bool("app-only", false, "Only run the app.")
 
 	// Probe flags
+	flag.BoolVar(&flags.probe.customNodeSku, "probe.custom.node.sku", false, "do you need to generate automatically when the node UUID is missing")
 	flag.BoolVar(&flags.probe.printOnStdout, "probe.publish.stdout", false, "Print reports on stdout instead of sending to app, for debugging")
 	flag.BoolVar(&flags.probe.basicAuth, "probe.basicAuth", false, "Use basic authentication to authenticate with app")
 	flag.StringVar(&flags.probe.username, "probe.basicAuth.username", "admin", "Username for basic authentication")

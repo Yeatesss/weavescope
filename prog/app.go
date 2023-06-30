@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/goji/httpauth"
@@ -30,8 +29,6 @@ const (
 	memcacheUpdateInterval = 1 * time.Minute
 	httpTimeout            = 90 * time.Second
 )
-
-var registerAppMetricsOnce sync.Once
 
 // Router creates the mux for all the various app components.
 func router(collector app.Collector, controlRouter app.ControlRouter, pipeRouter app.PipeRouter, externalUI bool, capabilities map[string]bool, metricsGraphURL string) http.Handler {

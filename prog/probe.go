@@ -88,12 +88,34 @@ func maybeExportProfileData(flags probeFlags) {
 		}()
 	}
 }
+func getNodeSku(customNodeSku bool) string {
+	for {
+		_, err := os.Stat("/etc/host/ngep-sku")
+		if os.IsNotExist(err) {
+			if customNodeSku {
+				uuid := []byte(uuid2.New())
+				os.WriteFile("/etc/host/ngep-sku", uuid, 0777)
+				continue
+			} else {
+				time.Sleep(5 * time.Second)
+				continue
+			}
+		}
+		if err != nil {
+			log.Fatalf("Failed to get node sku:%v", err)
+			return ""
+		}
+		uuid, _ := os.ReadFile("/etc/host/ngep-sku")
+		return string(uuid)
+	}
+
+}
 
 // Main runs the probe
 func probeMain(flags probeFlags, targets []appclient.Target) {
 	var (
 		hostId     = os.Getenv("PROBE_HOSTID")
-		uuid       []byte
+		hostID     = hostname.Get()
 		controlMap = make(map[string]chan *common_controls.ControlAction)
 	)
 	fmt.Println("Control Collection Addr:", os.Getenv("RESOURCE_COLLECTION_ADDR"))
@@ -145,24 +167,21 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	if flags.spyProcs && os.Getegid() != 0 {
 		log.Warn("--probe.proc.spy=true, but that requires root to find everything")
 	}
-	_, err = os.Stat("/etc/monitor/hostnodeid")
-	fmt.Println("hostnodeid:", err, os.IsNotExist(err))
-	if os.IsNotExist(err) {
-		uuid = []byte(uuid2.New())
-		os.WriteFile("/etc/monitor/hostnodeid", uuid, 0777)
-	} else {
-		uuid, _ = os.ReadFile("/etc/monitor/hostnodeid")
+
+	if !flags.kubernetesEnabled {
+		hostID = hostname.Get() + ":" + getNodeSku(flags.customNodeSku)
 	}
+
 	clusterUUIDByte, _ := os.ReadFile("/etc/cluster/uuid")
 	vars.ClusterUUID = string(clusterUUIDByte)
-	os.WriteFile("/etc/monitor/clusteruuid", []byte("uuid="+vars.ClusterUUID), 0777)
 
 	rand.Seed(time.Now().UnixNano())
+
 	var (
 		probeID  = strconv.FormatInt(rand.Int63(), 16)
 		hostName = hostname.Get()
-		hostID   = hostname.Get() + ":" + string(uuid) // TODO(pb): we should sanitize the hostname
 	)
+
 	log.Infof("probe starting, version %s, ID %s", version, probeID)
 	checkNewScopeVersion(flags)
 
