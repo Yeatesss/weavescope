@@ -184,6 +184,10 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 			var clusterNodes *Nodes
 			var onceDo = sync.Once{}
 			var tidy bool
+			if len(rpt.Container.Nodes) == 0 && len(rpt.Pod.Nodes) == 0 {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
 			for key, node := range rpt.Host.Nodes {
 				activeControls, _ := node.Latest.Lookup("active_controls")
 
