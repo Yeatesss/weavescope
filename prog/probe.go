@@ -97,6 +97,7 @@ func getNodeSku(customNodeSku bool) string {
 				os.WriteFile("/etc/host/ngep-sku", uuid, 0777)
 				continue
 			} else {
+				fmt.Println("wait ngep-sku")
 				time.Sleep(5 * time.Second)
 				continue
 			}
