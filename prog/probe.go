@@ -168,8 +168,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	if flags.spyProcs && os.Getegid() != 0 {
 		log.Warn("--probe.proc.spy=true, but that requires root to find everything")
 	}
-
-	if !flags.kubernetesEnabled {
+	if flags.kubernetesRole == "host" {
 		hostID = hostname.Get() + ":" + getNodeSku(flags.customNodeSku)
 	}
 
