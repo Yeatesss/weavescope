@@ -44,12 +44,13 @@ func newConnectionTracker(conf ReporterConfig) connectionTracker {
 	return ct
 }
 
-func flowToTuple(f conntrack.Conn) (ft fourTuple) {
-	if f.Orig.Dst.Equal(f.Reply.Src) {
+func flowToTuple(f conntrack.Conn, IsOrig bool) (ft fourTuple) {
+	if IsOrig {
 		return makeFourTuple(f.Orig.Src, f.Orig.Dst, uint16(f.Orig.SrcPort), uint16(f.Orig.DstPort))
+	} else {
+		return makeFourTuple(f.Reply.Src, f.Reply.Dst, uint16(f.Reply.SrcPort), uint16(f.Reply.DstPort))
 	}
-	// Handle DNAT-ed connections in the initial state
-	return makeFourTuple(f.Orig.Dst, f.Orig.Src, uint16(f.Orig.DstPort), uint16(f.Orig.SrcPort))
+
 }
 
 func (t *connectionTracker) useProcfs() {
@@ -99,9 +100,14 @@ func (t *connectionTracker) ReportConnections(rpt *report.Report) {
 	// consult the flowWalker for short-lived (conntracked) connections
 	seenTuples := map[string]fourTuple{}
 	t.flowWalker.walkFlows(func(f conntrack.Conn, alive bool) {
-		tuple := flowToTuple(f)
+		tuple := flowToTuple(f, true)
 		seenTuples[tuple.key()] = tuple
 		t.addConnection(rpt, "", tuple, 0, 0, 0, 1)
+
+		tuple = flowToTuple(f, false)
+		seenTuples[tuple.key()] = tuple
+		t.addConnection(rpt, "", tuple, 0, 0, 0, 1)
+
 	})
 
 	if t.conf.WalkProc && t.conf.Scanner != nil {
@@ -122,7 +128,7 @@ func existingFlowsFromConntrack(conf ReporterConfig) map[string]fourTuple {
 			if (f.Status & conntrack.IPS_NAT_MASK) == 0 {
 				continue
 			}
-			tuple := flowToTuple(f)
+			tuple := flowToTuple(f, true)
 			seenTuples[tuple.key()] = tuple
 		}
 	}
@@ -373,6 +379,7 @@ func (t *connectionTracker) Stop() error {
 }
 
 func connectionTuple(conn *procspy.Connection, seenTuples map[string]fourTuple) (fourTuple, uint32, bool) {
+	var incoming bool
 	tuple := makeFourTuple(conn.LocalAddress, conn.RemoteAddress, conn.LocalPort, conn.RemotePort)
 
 	// If we've already seen this connection, we should know the direction
@@ -380,6 +387,10 @@ func connectionTuple(conn *procspy.Connection, seenTuples map[string]fourTuple) 
 	// canonical direction. Otherwise, we can use a port-heuristic to guess
 	// the direction.
 	canonical, ok := seenTuples[tuple.key()]
-	incoming := (ok && canonical != tuple) || (!ok && tuple.fromPort < tuple.toPort)
+	if ok {
+		incoming = ok && canonical != tuple
+	} else {
+		incoming = !ok && tuple.fromPort < tuple.toPort
+	}
 	return tuple, conn.Proc.NetNamespaceID, incoming
 }

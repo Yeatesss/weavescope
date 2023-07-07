@@ -61,7 +61,9 @@ docker/weaveutil:
 
 docker/%: %
 	cp $* docker/
-
+govendor:
+	go mod vendor
+	cp -R include vendor/github.com/iovisor/gobpf/elf
 %.tar: docker/Dockerfile.%
 	$(SUDO) docker build --build-arg=revision=$(GIT_REVISION) -t $(DOCKERHUB_USER)/$* -f $< docker/
 	$(SUDO) docker tag $(DOCKERHUB_USER)/$* $(DOCKERHUB_USER)/$*:$(IMAGE_TAG)
