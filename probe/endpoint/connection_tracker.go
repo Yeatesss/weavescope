@@ -104,9 +104,9 @@ func (t *connectionTracker) ReportConnections(rpt *report.Report) {
 		seenTuples[tuple.key()] = tuple
 		t.addConnection(rpt, "", tuple, 0, 0, 0, 1)
 
-		tuple = flowToTuple(f, false)
-		seenTuples[tuple.key()] = tuple
-		t.addConnection(rpt, "", tuple, 0, 0, 0, 1)
+		//tuple = flowToTuple(f, false)
+		//seenTuples[tuple.key()] = tuple
+		//t.addConnection(rpt, "", tuple, 0, 0, 0, 1)
 
 	})
 
