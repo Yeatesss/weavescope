@@ -1,11 +1,11 @@
+//go:build linux
 // +build linux
 
 package endpoint
 
 import (
-	"net"
-
 	"github.com/typetypetype/conntrack"
+	"net"
 
 	"github.com/weaveworks/scope/report"
 )

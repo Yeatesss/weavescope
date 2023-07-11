@@ -89,12 +89,13 @@ func maybeExportProfileData(flags probeFlags) {
 	}
 }
 func getNodeSku(customNodeSku bool) string {
+	os.Mkdir("/etc/host", 0766)
 	for {
 		_, err := os.Stat("/etc/host/ngep-sku")
 		if os.IsNotExist(err) {
 			if customNodeSku {
 				uuid := []byte(uuid2.New())
-				os.WriteFile("/etc/host/ngep-sku", uuid, 0777)
+				fmt.Println(os.WriteFile("/etc/host/ngep-sku", uuid, 0777))
 				continue
 			} else {
 				fmt.Println("wait ngep-sku")

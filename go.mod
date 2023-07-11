@@ -5,13 +5,14 @@ go 1.18
 require (
 	camlistore.org v0.0.0-20171230002226-a5a65f0d8b22
 	github.com/NYTimes/gziphandler v1.0.2-0.20180227021810-5032c8878b9d
+	github.com/Yeatesss/container-software v0.0.0-20230626093559-b845a5244587
 	github.com/armon/go-radix v0.0.0-20160115234725-4239b77079c7
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
 	github.com/bluele/gcache v0.0.0-20150827032927-fb6c0b0e1ff0
 	github.com/bmizerany/assert v0.0.0-20160611221934-b7ed37b82869
 	github.com/c9s/goprocinfo v0.0.0-20151025191153-19cb9f127a9c
 	github.com/certifi/gocertifi v0.0.0-20150906030631-84c0a38a18fc
-	github.com/coocood/freecache v0.0.0-20150903053832-a27035d5537f
+	github.com/coocood/freecache v1.2.3
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/docker v24.0.2+incompatible // indirect
 	github.com/dolthub/swiss v0.1.1-0.20230403225903-a08bdf4889f1
@@ -38,7 +39,7 @@ require (
 	github.com/richo/GOSHOUT v0.0.0-20210103052837-9a2e452d4c18
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spaolacci/murmur3 v0.0.0-20150829172844-0d12bf811670
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.3
 	github.com/tylerb/graceful v1.2.13
 	github.com/typetypetype/conntrack v1.0.1-0.20181112022515-9d9dd841d4eb
 	github.com/ugorji/go v0.0.0-20170918222552-54210f4e076c
@@ -59,20 +60,25 @@ require (
 	k8s.io/client-go v0.22.5
 )
 
-require golang.org/x/sync v0.1.0
+require (
+	github.com/charmbracelet/log v0.2.2
+	golang.org/x/sync v0.3.0
+)
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
+	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/charmbracelet/lipgloss v0.7.1 // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/containerd/containerd v1.6.18 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dolthub/maphash v0.1.0 // indirect
 	github.com/go-kit/kit v0.9.0 // indirect
-	github.com/go-logfmt/logfmt v0.5.0 // indirect
+	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.2.2 // indirect
 	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/gogo/status v1.0.3 // indirect
@@ -84,8 +90,10 @@ require (
 	github.com/klauspost/compress v1.11.13 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.0.9 // indirect
-	github.com/mattn/go-isatty v0.0.4 // indirect
+	github.com/mattn/go-isatty v0.0.18 // indirect
+	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/moby/patternmatcher v0.5.0 // indirect
 	github.com/moby/sys/sequential v0.5.0 // indirect
@@ -93,6 +101,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
+	github.com/muesli/reflow v0.3.0 // indirect
+	github.com/muesli/termenv v0.15.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
 	github.com/opencontainers/runc v1.1.5 // indirect
@@ -102,6 +112,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.30.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/uber/jaeger-client-go v2.22.1+incompatible // indirect
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
@@ -127,5 +138,7 @@ require (
 
 // Do not upgrade until https://github.com/fluent/fluent-logger-golang/issues/80 is fixed
 replace github.com/fluent/fluent-logger-golang => github.com/fluent/fluent-logger-golang v1.2.1
+
+replace github.com/Yeatesss/container-software v0.0.0-20230626093559-b845a5244587 => ../container-software
 
 replace github.com/fsouza/go-dockerclient v1.3.0 => ../go-dockerclient

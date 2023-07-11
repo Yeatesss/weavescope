@@ -27,6 +27,7 @@ const (
 	ImageCreatedAt   = report.DockerImageCreatedAt
 	IsInHostNetwork  = report.DockerIsInHostNetwork
 	ImageLabelPrefix = report.DockerImageLabelPrefix
+	ContainerEnvPath = report.ContainerEnvPath
 	ClusterUUID      = report.DockerClusterUUID
 	ImageTableID     = "image_table"
 	ServiceName      = report.DockerServiceName

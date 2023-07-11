@@ -53,6 +53,7 @@ const (
 	DockerContainerRestartCount  = "docker_container_restart_count"
 	DockerContainerNetworkMode   = "docker_container_network_mode"
 	DockerClusterUUID            = "cluster_uuid"
+	ContainerEnvPath             = "container_env_path"
 
 	DockerEnvPrefix = "docker_env_"
 	// probe/kubernetes

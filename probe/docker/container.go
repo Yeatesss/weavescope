@@ -397,6 +397,12 @@ type NetworkSet struct {
 	EndpointID string `json:"endpoint_id"`
 	Mac        string `json:"mac"`
 }
+type Port struct {
+	Port       string `json:"port"`
+	Protocol   string `json:"protocol"`
+	BindPort   string `json:"bind_port"`
+	BindHostIP string `json:"bind_host_ip"`
+}
 
 func (c *container) getBaseNode() report.Node {
 	result := report.MakeNodeWith(report.MakeContainerNodeID(c.ID()), map[string]string{
@@ -409,8 +415,17 @@ func (c *container) getBaseNode() report.Node {
 	if len(c.container.Mounts) > 0 {
 		result = result.WithSets(c.makeMountSet())
 	}
+	for _, env := range c.container.Config.Env {
+		if strings.Contains(env, "PATH=") {
+			result = result.WithLatest(ContainerEnvPath, mtime.Now(), env)
+			break
+		}
+	}
 	if len(c.container.NetworkSettings.Networks) > 0 {
 		result = result.WithSets(c.makeNetworkSet())
+	}
+	if len(c.container.NetworkSettings.Ports) > 0 {
+		result = result.WithSets(c.makeNetworkPortSet())
 	}
 	result = result.AddPrefixPropertyList(LabelPrefix, c.container.Config.Labels)
 	if !c.noEnvironmentVariables {
@@ -457,10 +472,30 @@ func (c *container) makeNetworkSet() report.Sets {
 
 			networkSlice = append(networkSlice, networkStr)
 		}
-
 	}
 
 	return report.MakeSets().Add(report.Network, report.MakeStringSet(networkSlice...))
+
+}
+func (c *container) makeNetworkPortSet() report.Sets {
+	var portSlice []string
+
+	for port, binds := range c.container.NetworkSettings.Ports {
+		port := Port{
+			Port:       strings.Split(string(port), "/")[0],
+			Protocol:   strings.Split(string(port), "/")[1],
+			BindPort:   "",
+			BindHostIP: "",
+		}
+		if len(binds) > 0 {
+			port.BindPort = binds[0].HostPort
+			port.BindHostIP = binds[0].HostIP
+		}
+		tmpPort, _ := jsoniter.MarshalToString(port)
+		portSlice = append(portSlice, tmpPort)
+	}
+
+	return report.MakeSets().Add(report.Ports, report.MakeStringSet(portSlice...))
 
 }
 
@@ -497,10 +532,12 @@ func (c *container) GetNode() report.Node {
 		latest[ContainerUptime] = strconv.Itoa(uptimeSeconds)
 		latest[ContainerRestartCount] = strconv.Itoa(c.container.RestartCount)
 		latest[ContainerNetworkMode] = networkMode
+
 	}
 
 	result := c.baseNode.WithLatests(latest)
 	result = result.WithSets(c.makeNetworkSet())
+	result = result.WithSets(c.makeNetworkPortSet())
 	result = result.WithLatestActiveControls(c.controls()...)
 	result = result.WithMetrics(c.metrics())
 	return result

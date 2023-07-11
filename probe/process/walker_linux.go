@@ -33,6 +33,8 @@ var (
 	// value: two strings separated by a '\0'
 	cmdlineCache = freecache.NewCache(1024 * 16)
 
+	exeCache = freecache.NewCache(1024 * 16)
+
 	errDeadProcess = errors.New("The process is dead")
 )
 
@@ -183,6 +185,29 @@ func (w *walker) readCmdline(filename string) (cmdline, name string) {
 	return
 }
 
+func (w *walker) readExe(filename string) (name string) {
+	if cmdlineBuf, err := fs.ReadFile(path.Join(w.procRoot, filename, "exe")); err == nil {
+		fmt.Println(path.Join(w.procRoot, filename, "exe"))
+		// like proc, treat name as the first element of command line
+		i := bytes.IndexByte(cmdlineBuf, '\000')
+
+		if i == -1 {
+			i = len(cmdlineBuf)
+		}
+		name = string(cmdlineBuf[:i])
+		cmdlineBuf = bytes.Replace(cmdlineBuf, []byte{'\000'}, []byte{' '}, -1)
+		//cmdline = string(cmdlineBuf)
+	}
+	if name == "" {
+		if commBuf, err := fs.ReadFile(path.Join(w.procRoot, filename, "exe")); err == nil {
+			name = "[" + strings.TrimSpace(string(commBuf)) + "]"
+		} else {
+			name = "(unknown)"
+		}
+	}
+	return
+}
+
 // IsProcInAccept returns true if the process has a at least one thread
 // blocked on the accept() system call
 func IsProcInAccept(procRoot, pid string) (ret bool) {
@@ -245,6 +270,15 @@ func (w *walker) Walk(f func(Process, Process)) error {
 			binary.LittleEndian.PutUint64(buf, openFilesLimit)
 			limitsCache.Set([]byte(filename), buf, limitsCacheTimeout)
 		}
+
+		//if v, err := exeCache.Get([]byte(filename)); err == nil {
+		//	separatorPos := strings.Index(string(v), "\x00")
+		//	exe = string(v[:separatorPos])
+		//	name = string(v[separatorPos+1:])
+		//} else {
+		//a := w.readExe(filename)
+		//fmt.Println(a)
+		//}
 
 		cmdline, name := "", ""
 		if v, err := cmdlineCache.Get([]byte(filename)); err == nil {

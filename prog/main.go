@@ -4,6 +4,8 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
+	log2 "github.com/Yeatesss/container-software/pkg/log"
+	log3 "github.com/charmbracelet/log"
 	"github.com/weaveworks/common/user"
 	"github.com/weaveworks/scope/common/target"
 	"io/ioutil"
@@ -410,6 +412,7 @@ func main() {
 
 	flags := flags{}
 	setupFlags(&flags)
+	log2.InitLogger(log3.InfoLevel)
 	flag.Parse()
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
 	//flags.probe.userid = "2222222"
@@ -419,6 +422,7 @@ func main() {
 	//}
 	//fmt.Println("probe uid :", flags.probe.userid)
 	// Deal with common args
+
 	if flags.debug {
 		flags.probe.logLevel = "debug"
 		flags.app.logLevel = "debug"

@@ -61,6 +61,7 @@ docker/weaveutil:
 
 docker/%: %
 	cp $* docker/
+
 govendor:
 	go mod vendor
 	cp -R include vendor/github.com/iovisor/gobpf/elf

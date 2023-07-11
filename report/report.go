@@ -28,6 +28,7 @@ const (
 	ContainerImage        = "container_image"
 	Mount                 = "mount"
 	Network               = "network"
+	Ports                 = "ports"
 	UnuseImage            = "unuse_image"
 	Host                  = "host"
 	Overlay               = "overlay"
