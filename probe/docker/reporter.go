@@ -218,6 +218,8 @@ func getLocalIPs() ([]string, []net.IP, error) {
 }
 
 func (r *Reporter) containerTopology(localAddrs []net.IP) report.Topology {
+	var portBinding = make(map[string]map[string]PortBinding)
+
 	result := report.MakeTopology().
 		WithMetadataTemplates(ContainerMetadataTemplates).
 		WithMetricTemplates(ContainerMetricTemplates).
@@ -255,7 +257,22 @@ func (r *Reporter) containerTopology(localAddrs []net.IP) report.Topology {
 			} else if ok && networkMode == "host" {
 				return hostNetworkInfo, true
 			}
-
+			var ports map[string]PortBinding
+			if ports, ok = portBinding[container.ID()]; !ok {
+				ports = make(map[string]PortBinding)
+			}
+			for port, bindings := range container.Container().NetworkSettings.Ports {
+				if l := len(bindings); l > 0 {
+					ports[port.Port()] = PortBinding{
+						HostIP:    bindings[l-1].HostIP,
+						HostPort:  bindings[l-1].HostPort,
+						Protocols: port.Proto(),
+					}
+				}
+			}
+			if len(ports) > 0 {
+				portBinding[container.ID()] = ports
+			}
 			return container.NetworkInfo(localAddrs), false
 		}
 		for _, node := range nodes {
@@ -276,6 +293,7 @@ func (r *Reporter) containerTopology(localAddrs []net.IP) report.Topology {
 			result.AddNode(node)
 
 		}
+		r.registry.ReplacePortsBinding(portBinding)
 	}
 
 	return result

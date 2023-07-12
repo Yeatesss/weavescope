@@ -424,9 +424,6 @@ func (c *container) getBaseNode() report.Node {
 	if len(c.container.NetworkSettings.Networks) > 0 {
 		result = result.WithSets(c.makeNetworkSet())
 	}
-	if len(c.container.NetworkSettings.Ports) > 0 {
-		result = result.WithSets(c.makeNetworkPortSet())
-	}
 	result = result.AddPrefixPropertyList(LabelPrefix, c.container.Config.Labels)
 	if !c.noEnvironmentVariables {
 		result = result.AddPrefixPropertyList(EnvPrefix, c.env())
@@ -477,27 +474,6 @@ func (c *container) makeNetworkSet() report.Sets {
 	return report.MakeSets().Add(report.Network, report.MakeStringSet(networkSlice...))
 
 }
-func (c *container) makeNetworkPortSet() report.Sets {
-	var portSlice []string
-
-	for port, binds := range c.container.NetworkSettings.Ports {
-		port := Port{
-			Port:       strings.Split(string(port), "/")[0],
-			Protocol:   strings.Split(string(port), "/")[1],
-			BindPort:   "",
-			BindHostIP: "",
-		}
-		if len(binds) > 0 {
-			port.BindPort = binds[0].HostPort
-			port.BindHostIP = binds[0].HostIP
-		}
-		tmpPort, _ := jsoniter.MarshalToString(port)
-		portSlice = append(portSlice, tmpPort)
-	}
-
-	return report.MakeSets().Add(report.Ports, report.MakeStringSet(portSlice...))
-
-}
 
 // Return a slice including all controls that should be shown on this container
 func (c *container) controls() []string {
@@ -537,7 +513,6 @@ func (c *container) GetNode() report.Node {
 
 	result := c.baseNode.WithLatests(latest)
 	result = result.WithSets(c.makeNetworkSet())
-	result = result.WithSets(c.makeNetworkPortSet())
 	result = result.WithLatestActiveControls(c.controls()...)
 	result = result.WithMetrics(c.metrics())
 	return result

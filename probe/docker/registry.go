@@ -44,6 +44,8 @@ type Registry interface {
 	GetContainer(string) (Container, bool)
 	GetContainerByPrefix(string) (Container, bool)
 	GetContainerImage(string) (docker_client.APIImages, bool)
+	ReplacePortsBinding(map[string]map[string]PortBinding)
+	GetContainerPortsBinding(containerID string) map[string]PortBinding
 }
 
 // ContainerUpdateWatcher is the type of functions that get called when containers are updated.
@@ -63,12 +65,18 @@ type registry struct {
 
 	watchers        []ContainerUpdateWatcher
 	containers      *radix.Tree
+	ctrBindPorts    map[string]map[string]PortBinding // map[containerID]map[containerPort]hostIP+hostPort
 	containersByPID map[int]Container
 	images          map[string]docker_client.APIImages
 	usedImages      map[string]docker_client.APIImages
 	networks        []docker_client.Network
 	pipeIDToexecID  map[string]string
 	controlChannel  chan *common_controls.ControlAction
+}
+type PortBinding struct {
+	HostIP    string
+	HostPort  string
+	Protocols string
 }
 
 // Client interface for mocking.
@@ -124,6 +132,7 @@ func NewRegistry(options RegistryOptions) (Registry, error) {
 
 	r := &registry{
 		containers:             radix.New(),
+		ctrBindPorts:           map[string]map[string]PortBinding{},
 		containersByPID:        map[int]Container{},
 		images:                 map[string]docker_client.APIImages{},
 		usedImages:             map[string]docker_client.APIImages{},
@@ -451,6 +460,16 @@ func (r *registry) GetContainerImage(id string) (docker_client.APIImages, bool) 
 	defer r.RUnlock()
 	image, ok := r.images[id]
 	return image, ok
+}
+
+func (r *registry) ReplacePortsBinding(m map[string]map[string]PortBinding) {
+	r.ctrBindPorts = m
+}
+
+func (r *registry) GetContainerPortsBinding(containerID string) map[string]PortBinding {
+	r.RLock()
+	defer r.RUnlock()
+	return r.ctrBindPorts[containerID]
 }
 
 // WalkImages runs f on every image of running containers the registry

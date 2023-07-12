@@ -1,15 +1,19 @@
 package docker
 
 import (
+	"context"
 	"github.com/Yeatesss/container-software/core"
+	"github.com/Yeatesss/container-software/pkg/command"
 	yprocess "github.com/Yeatesss/container-software/pkg/proc/process"
 	"github.com/dolthub/swiss"
+	log "github.com/sirupsen/logrus"
 	"github.com/weaveworks/common/mtime"
 	"github.com/weaveworks/scope/probe/process"
 	"github.com/weaveworks/scope/report"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Node metadata keys.
@@ -125,6 +129,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		if c == nil || ContainerIsStopped(c) || c.PID() == 1 {
 			continue
 		}
+		//以下操作在当前进程存在对应容器的基础上
 		var containerID = c.ID()
 
 		for _, env := range c.Container().Config.Env {
@@ -144,7 +149,6 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			ps = yprocess.NewProcess(int64(pid), []int64{})
 			pses.Put(int64(pid), ps)
 		}
-		//_ = processes
 
 		ctrProcess.Put(containerID, append(processes, &core.Process{Process: ps}))
 		if ppidStr, ok = node.Latest.Lookup(process.PPID); ok && c.Container().State.Pid != int(pid) {
@@ -164,14 +168,39 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		}
 		node = node.WithLatest(ContainerID, mtime.Now(), containerID)
 		node = node.WithParent(report.Container, report.MakeContainerNodeID(containerID))
-
+		//获取当前进程在容器内绑定端口信息
+		var (
+			endpoints       []Endpoint
+			portsBindingSet report.StringSet
+		)
+		process := yprocess.NewProcess(int64(candidate), nil)
+		endpoints, err = getBindingPorts(process)
+		if err != nil {
+			log.Errorf("Cannot get container process endpoint fail : %v, error: %v", candidate, err)
+		}
+		nspid := getNsPid(process)
+		node = node.WithLatest("inside_pid", time.Now(), nspid)
+		node = node.WithLatest("exe", time.Now(), getExe(process))
+		node = node.WithLatest("user", time.Now(), getUser(process))
+		for _, endpoint := range endpoints {
+			var tmpData = make([]string, 4, 4)
+			portBinding := getBindingPortsSet(t.registry, containerID, endpoint.Port)
+			tmpData[0] = endpoint.Port
+			tmpData[1] = endpoint.Protocols
+			tmpData[2] = portBinding.HostIP
+			tmpData[3] = portBinding.HostPort
+			portsBindingSet = portsBindingSet.Add(strings.Join(tmpData, ","))
+		}
+		if len(portsBindingSet) > 0 {
+			node = node.WithSet("bind_ports", portsBindingSet)
+		}
 		// If we can work out the image name, add a parent tag for it
 		image, ok := t.registry.GetContainerImage(c.Image())
 		if ok && len(image.RepoTags) > 0 {
 			imageName := ImageNameWithoutTag(image.RepoTags[0])
 			node = node.WithParent(report.ContainerImage, report.MakeContainerImageNodeID(imageName))
 		}
-
+		node = node.WithLatest("is_container", time.Now(), "1")
 		topology.ReplaceNode(node)
 	}
 	var containerLocker sync.RWMutex
@@ -200,4 +229,77 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		return false
 	})
 
+}
+
+type Endpoint struct {
+	Protocols string
+	Port      string
+}
+
+func getBindingPorts(ps yprocess.Process) ([]Endpoint, error) {
+	var endpoints []Endpoint
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	eps, err := core.GetEndpoint(ctx, ps)
+	if err != nil {
+		return endpoints, err
+	}
+	for _, endpoint := range eps {
+		ports := strings.Split(endpoint, "/")
+		if len(ports) == 2 {
+			idx := strings.LastIndex(ports[1], ":")
+
+			endpoints = append(endpoints, Endpoint{
+				Protocols: ports[0],
+				Port:      ports[1][idx+1:],
+			})
+
+		}
+	}
+	return endpoints, nil
+}
+func getNsPid(ps yprocess.Process) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	nsPids, err := ps.NsPids(ctx)
+	if err != nil {
+		log.Errorf("Get process nspid fail:%v", ps.Pid())
+		return ""
+	}
+	if len(nsPids) > 0 {
+		return nsPids[len(nsPids)-1]
+	}
+	return ""
+}
+func getExe(ps yprocess.Process) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	exe, err := ps.Exe(ctx)
+	if err != nil {
+		log.Errorf("Get process exe fail:%v", ps.Pid())
+		return ""
+	}
+	if exe.Len() > 0 {
+		exeByte, _ := command.ReadField(exe.Bytes(), 11)
+		return string(exeByte)
+	}
+	return ""
+}
+func getUser(ps yprocess.Process) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	user, err := core.GetRunUser(ctx, ps)
+	if err != nil {
+		log.Errorf("Get process user fail:%v", ps.Pid())
+		return ""
+	}
+
+	return user
+}
+func getBindingPortsSet(registry Registry, containerID, port string) PortBinding {
+	portBinding := registry.GetContainerPortsBinding(containerID)
+	if portBinding == nil || len(portBinding) == 0 {
+		return PortBinding{}
+	}
+	return portBinding[port]
 }
