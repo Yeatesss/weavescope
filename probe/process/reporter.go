@@ -13,6 +13,7 @@ const (
 	PID            = report.PID
 	Name           = report.Name
 	ClusterUUID    = "cluster_uuid"
+	Comm           = "comm"
 	PPID           = report.PPID
 	Cmdline        = report.Cmdline
 	Threads        = report.Threads
@@ -92,7 +93,9 @@ func (r *Reporter) processTopology() (report.Topology, error) {
 		if p.Name != "" {
 			node = node.WithLatest(Name, now, p.Name)
 		}
-
+		if p.Comm != "" {
+			node = node.WithLatest(Comm, now, p.Comm)
+		}
 		if p.Cmdline != "" {
 			if r.noCommandLineArguments {
 				node = node.WithLatest(Cmdline, now, report.StripCommandArgs(p.Cmdline))

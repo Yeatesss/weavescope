@@ -13,7 +13,7 @@ import (
 
 var (
 	pushSlaveSignal                                                                                                    = make(chan string, 100)
-	LimitNode         int64                                                                                            = -1 //-2：未设置 -1:无限制 >=0:限制
+	LimitNode         int64                                                                                            = -2 //-2：未设置 -1:无限制 >=0:限制
 	AutoAuthorize     bool                                                                                                  //-2：未设置 -1:无限制 >=0:限制
 	AuthorizeNodeList = &AuthorizeNode{Lock: sync.RWMutex{}, Nodes: make(map[string]struct{}), NodesSlice: []string{}}      //已授权节点列表
 	SlaveCollectors   = &SlaveCollector{Lock: sync.RWMutex{}, Collectors: make(map[string]struct{})}                        //已授权节点列表,形如http://127.0.0.1,http://127.0.0.2,目标地址:中转地址

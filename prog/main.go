@@ -170,6 +170,7 @@ type appFlags struct {
 	containerName  string
 	dockerEndpoint string
 
+	limitMode                 int64
 	collectorAddr             string // how to find collectors if deployed as microservices
 	s3URL                     string
 	storeInterval             time.Duration
@@ -384,6 +385,7 @@ func setupFlags(flags *flags) {
 	flag.Var(&flags.containerLabelFilterFlags, "app.container-label-filter", "Add container label-based view filter, specified as title:label. Multiple flags are accepted. Example: --app.container-label-filter='Database Containers:role=db'")
 	flag.Var(&flags.containerLabelFilterFlagsExclude, "app.container-label-filter-exclude", "Add container label-based view filter that excludes containers with the given label, specified as title:label. Multiple flags are accepted. Example: --app.container-label-filter-exclude='Database Containers:role=db'")
 
+	flag.Int64Var(&flags.app.limitMode, "app.limit-mode", -2, "")
 	flag.StringVar(&flags.app.collectorAddr, "app.collector-addr", "", "Address to look up collectors when deployed as microservices")
 	flag.StringVar(&flags.app.s3URL, "app.collector.s3", "local", "S3 URL to use (when collector is dynamodb)")
 	flag.DurationVar(&flags.app.storeInterval, "app.collector.store-interval", 0, "How often to store merged incoming reports.")
@@ -414,6 +416,7 @@ func main() {
 	setupFlags(&flags)
 	log2.InitLogger(log3.InfoLevel)
 	flag.Parse()
+	app.LimitNode = flags.app.limitMode
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
 	//flags.probe.userid = "2222222"
 	//

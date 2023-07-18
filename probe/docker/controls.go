@@ -1,10 +1,12 @@
 package docker
 
 import (
+	"context"
 	docker_client "github.com/fsouza/go-dockerclient"
 	log "github.com/sirupsen/logrus"
 	"github.com/weaveworks/scope/report"
 	"net/http"
+	"time"
 )
 
 // Control IDs used by the docker integration.
@@ -226,6 +228,7 @@ func (r *registry) registerControls() {
 		UnpauseContainer: r.unpauseContainer,
 		StopContainer:    r.stopContainer,
 		StartContainer:   r.startContainer,
+		RemoveContainer:  r.removeContainer,
 	}
 	go func() {
 		for action := range r.controlChannel {
@@ -247,6 +250,16 @@ func (r *registry) stopContainer(containerID string, _ http.Request) error {
 func (r *registry) startContainer(containerID string, _ http.Request) error {
 	log.Infof("Start container %s", containerID)
 	return r.client.StartContainer(containerID, &docker_client.HostConfig{})
+}
+func (r *registry) removeContainer(containerID string, _ http.Request) error {
+	log.Infof("Remove container %s", containerID)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return r.client.RemoveContainer(docker_client.RemoveContainerOptions{
+		ID:      containerID,
+		Force:   true,
+		Context: ctx,
+	})
 }
 func (r *registry) unpauseContainer(containerID string, _ http.Request) error {
 	log.Infof("Unpausing container %s", containerID)

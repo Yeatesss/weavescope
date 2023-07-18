@@ -172,10 +172,10 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	if flags.kubernetesRole == "host" {
 		hostID = hostname.Get() + ":" + getNodeSku(flags.customNodeSku)
 	}
-
+	//TODO
 	clusterUUIDByte, _ := os.ReadFile("/etc/cluster/uuid")
 	vars.ClusterUUID = string(clusterUUIDByte)
-
+	//vars.ClusterUUID = "TEST_UUID"
 	rand.Seed(time.Now().UnixNano())
 
 	var (

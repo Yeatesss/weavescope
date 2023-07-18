@@ -131,75 +131,79 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		}
 		//以下操作在当前进程存在对应容器的基础上
 		var containerID = c.ID()
-
-		for _, env := range c.Container().Config.Env {
-			if strings.Contains(env, "PATH=") {
-				SoftFinder.EnvPath.Set([]byte(containerID), []byte(env), 0)
-				break
-			}
-		}
-		var processes core.Processes
-		processes, ok = ctrProcess.Get(containerID)
-		if !ok {
-			processes = core.Processes{}
-
-		}
-		//维护容器进程
-		if ps, ok = pses.Get(int64(pid)); !ok {
-			ps = yprocess.NewProcess(int64(pid), []int64{})
-			pses.Put(int64(pid), ps)
-		}
-
-		ctrProcess.Put(containerID, append(processes, &core.Process{Process: ps}))
-		if ppidStr, ok = node.Latest.Lookup(process.PPID); ok && c.Container().State.Pid != int(pid) {
-			//维护父进程的childPid数据
-			var ppidInt64 int64
-			ppidInt64, err = strconv.ParseInt(ppidStr, 10, 64)
-			if err == nil {
-				var pps yprocess.Process
-				if pps, ok = pses.Get(ppidInt64); !ok {
-					pps = yprocess.NewProcess(ppidInt64, []int64{int64(pid)})
-				} else {
-					pps.SetChildPids(append(pps.ChildPids(), int64(pid)))
-				}
-				pses.Put(ppidInt64, pps)
-
-			}
-		}
 		node = node.WithLatest(ContainerID, mtime.Now(), containerID)
 		node = node.WithParent(report.Container, report.MakeContainerNodeID(containerID))
-		//获取当前进程在容器内绑定端口信息
-		var (
-			endpoints       []Endpoint
-			portsBindingSet report.StringSet
-		)
-		process := yprocess.NewProcess(int64(candidate), nil)
-		endpoints, err = getBindingPorts(process)
-		if err != nil {
-			log.Errorf("Cannot get container process endpoint fail : %v, error: %v", candidate, err)
-		}
-		nspid := getNsPid(process)
-		node = node.WithLatest("inside_pid", time.Now(), nspid)
-		node = node.WithLatest("exe", time.Now(), getExe(process))
-		node = node.WithLatest("user", time.Now(), getUser(process))
-		for _, endpoint := range endpoints {
-			var tmpData = make([]string, 4, 4)
-			portBinding := getBindingPortsSet(t.registry, containerID, endpoint.Port)
-			tmpData[0] = endpoint.Port
-			tmpData[1] = endpoint.Protocols
-			tmpData[2] = portBinding.HostIP
-			tmpData[3] = portBinding.HostPort
-			portsBindingSet = portsBindingSet.Add(strings.Join(tmpData, ","))
-		}
-		if len(portsBindingSet) > 0 {
-			node = node.WithSet("bind_ports", portsBindingSet)
-		}
+
 		// If we can work out the image name, add a parent tag for it
 		image, ok := t.registry.GetContainerImage(c.Image())
 		if ok && len(image.RepoTags) > 0 {
 			imageName := ImageNameWithoutTag(image.RepoTags[0])
 			node = node.WithParent(report.ContainerImage, report.MakeContainerImageNodeID(imageName))
 		}
+		if c.Container().Config.Labels["io.kubernetes.docker.type"] != "podsandbox" {
+			for _, env := range c.Container().Config.Env {
+				if strings.Contains(env, "PATH=") {
+					SoftFinder.EnvPath.Set([]byte(containerID), []byte(env), 0)
+					break
+				}
+			}
+			var processes core.Processes
+			processes, ok = ctrProcess.Get(containerID)
+			if !ok {
+				processes = core.Processes{}
+
+			}
+			//维护容器进程
+			if ps, ok = pses.Get(int64(pid)); !ok {
+				ps = yprocess.NewProcess(int64(pid), []int64{})
+				pses.Put(int64(pid), ps)
+			}
+
+			ctrProcess.Put(containerID, append(processes, &core.Process{Process: ps}))
+			if ppidStr, ok = node.Latest.Lookup(process.PPID); ok && c.Container().State.Pid != int(pid) {
+				//维护父进程的childPid数据
+				var ppidInt64 int64
+				ppidInt64, err = strconv.ParseInt(ppidStr, 10, 64)
+				if err == nil {
+					var pps yprocess.Process
+					if pps, ok = pses.Get(ppidInt64); !ok {
+						pps = yprocess.NewProcess(ppidInt64, []int64{int64(pid)})
+					} else {
+						pps.SetChildPids(append(pps.ChildPids(), int64(pid)))
+					}
+					pses.Put(ppidInt64, pps)
+
+				}
+			}
+
+			//获取当前进程在容器内绑定端口信息
+			var (
+				endpoints       []Endpoint
+				portsBindingSet report.StringSet
+			)
+			process := yprocess.NewProcess(int64(pid), nil)
+			endpoints, err = getBindingPorts(process)
+			if err != nil {
+				log.Errorf("Cannot get container process endpoint fail : %v, error: %v", candidate, err)
+			}
+			nspid := getNsPid(process)
+			node = node.WithLatest("inside_pid", time.Now(), nspid)
+			node = node.WithLatest("exe", time.Now(), getExe(process))
+			node = node.WithLatest("user", time.Now(), getUser(process))
+			for _, endpoint := range endpoints {
+				var tmpData = make([]string, 4, 4)
+				portBinding := getBindingPortsSet(t.registry, containerID, endpoint.Port)
+				tmpData[0] = endpoint.Port
+				tmpData[1] = endpoint.Protocols
+				tmpData[2] = portBinding.HostIP
+				tmpData[3] = portBinding.HostPort
+				portsBindingSet = portsBindingSet.Add(strings.Join(tmpData, ","))
+			}
+			if len(portsBindingSet) > 0 {
+				node = node.WithSet("bind_ports", portsBindingSet)
+			}
+		}
+
 		node = node.WithLatest("is_container", time.Now(), "1")
 		topology.ReplaceNode(node)
 	}

@@ -2,13 +2,16 @@ package process
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/Yeatesss/container-software/pkg/proc/process"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	linuxproc "github.com/c9s/goprocinfo/linux"
 	"github.com/coocood/freecache"
@@ -280,7 +283,7 @@ func (w *walker) Walk(f func(Process, Process)) error {
 		//fmt.Println(a)
 		//}
 
-		cmdline, name := "", ""
+		cmdline, name, comm := "", "", ""
 		if v, err := cmdlineCache.Get([]byte(filename)); err == nil {
 			separatorPos := strings.Index(string(v), "\x00")
 			cmdline = string(v[:separatorPos])
@@ -289,7 +292,11 @@ func (w *walker) Walk(f func(Process, Process)) error {
 			cmdline, name = w.readCmdline(filename)
 			cmdlineCache.Set([]byte(filename), []byte(fmt.Sprintf("%s\x00%s", cmdline, name)), cmdlineCacheTimeout)
 		}
-
+		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		commBuf, commErr := process.NewProcess(int64(pid), nil).Comm(ctx)
+		if commErr == nil {
+			comm = commBuf.String()
+		}
 		isWaitingInAccept := false
 		if w.gatheringWaitingInAccept {
 			isWaitingInAccept = IsProcInAccept(w.procRoot, filename)
@@ -299,6 +306,7 @@ func (w *walker) Walk(f func(Process, Process)) error {
 			PID:               pid,
 			PPID:              ppid,
 			Name:              name,
+			Comm:              comm,
 			Cmdline:           cmdline,
 			Threads:           threads,
 			Jiffies:           jiffies,

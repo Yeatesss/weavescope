@@ -26,7 +26,7 @@ type SoftwareFinder struct {
 var SoftFinder = NewSoftwareFinder()
 
 func NewSoftwareFinder() (finder *SoftwareFinder) {
-	ctrCh := make(chan *core.Container, 100)
+	ctrCh := make(chan *core.Container, 300)
 	finder = &SoftwareFinder{
 		ContainerCh: ctrCh,
 		CtrSofts:    freecache.NewCache(10 * 1024 * 1024),
@@ -34,20 +34,20 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 	}
 	go func() {
 		var works = sync.Map{}
-		var concurrent = make(chan struct{}, 10)
+		var concurrent = make(chan struct{}, 5)
 		for ctr := range ctrCh {
 			if _, ok := works.Load(ctr.Id); ok {
 				continue
 			}
 			works.Store(ctr.Id, struct{}{})
-			fmt.Println(len(ctrCh))
+			//fmt.Println(len(ctrCh))
 			concurrent <- struct{}{}
 			go func(container *core.Container) {
 				defer func() {
 					<-concurrent
 					works.Delete(container.Id)
 				}()
-				logger.Logger.Infof("Get Software: %s", container.Id)
+				//logger.Logger.Infof("Get Software: %s", container.Id)
 
 				softwareFinderSingle.Do(container.Id, func() (interface{}, error) {
 					var softMap = map[string]map[string]*core.Software{"web": make(map[string]*core.Software), "database": make(map[string]*core.Software)}
@@ -102,7 +102,7 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 	for _, softType := range []string{"web", "database"} {
 		if v, err := s.CtrSofts.Get([]byte(fmt.Sprintf("%s.%s", ctr.Id, softType))); err == nil {
 			var softs []string
-			logger.Logger.Infof("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
+			//logger.Logger.Infof("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
 			if err := jsoniter.Unmarshal(v, &softs); err == nil {
 				hit = true
 				if len(softs) > 0 {
@@ -116,11 +116,11 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 		}
 	}
 	if !hit {
-		logger.Logger.Infof("Parse Software Not Hit:%s", ctr.Id)
+		//logger.Logger.Infof("Parse Software Not Hit:%s", ctr.Id)
 		select {
 		case s.ContainerCh <- ctr:
 		default:
-			fmt.Println("阻塞", ctr.Id)
+			//fmt.Println("阻塞", ctr.Id)
 			fmt.Println(len(s.ContainerCh))
 		}
 

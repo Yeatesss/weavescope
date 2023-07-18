@@ -7,6 +7,7 @@ type Process struct {
 	PID, PPID         int
 	Name              string
 	Cmdline           string
+	Comm              string
 	Threads           int
 	Jiffies           uint64
 	RSSBytes          uint64
