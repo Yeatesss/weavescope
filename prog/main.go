@@ -7,6 +7,7 @@ import (
 	log2 "github.com/Yeatesss/container-software/pkg/log"
 	log3 "github.com/charmbracelet/log"
 	"github.com/weaveworks/common/user"
+	"github.com/weaveworks/scope/common/performance_analyzer"
 	"github.com/weaveworks/scope/common/target"
 	"io/ioutil"
 	"net"
@@ -418,6 +419,8 @@ func main() {
 	flag.Parse()
 	app.LimitNode = flags.app.limitMode
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
+	go performance_analyzer.NewAnalyze(os.Getenv("PYRO_SERVER"), os.Getenv("PYRO_NAME")).Start()
+
 	//flags.probe.userid = "2222222"
 	//
 	//if strings.Index(hostname.Get(), "n0") >= 0 || strings.Index(hostname.Get(), "n1") >= 0 {
