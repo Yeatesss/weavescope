@@ -90,6 +90,7 @@ func (t *Tagger) Tag(r report.Report) (report.Report, error) {
 func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopology *report.Topology) {
 	var (
 		ctrProcess = swiss.NewMap[string, core.Processes](42)
+		pidMap     = swiss.NewMap[string, string](42)
 		pses       = swiss.NewMap[int64, yprocess.Process](42)
 	)
 	for _, node := range topology.Nodes {
@@ -129,6 +130,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		if c == nil || ContainerIsStopped(c) || c.PID() == 1 {
 			continue
 		}
+		pidMap.Put(pidStr, node.ID)
 		//以下操作在当前进程存在对应容器的基础上
 		var containerID = c.ID()
 		node = node.WithLatest(ContainerID, mtime.Now(), containerID)
@@ -220,12 +222,21 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		return
 	}
 	ctrProcess.Iter(func(id string, ps core.Processes) (stop bool) {
-
 		envPath, _ := SoftFinder.EnvPath.Get([]byte(id))
 		container := &core.Container{
 			Id:        id,
 			EnvPath:   string(envPath),
 			Processes: ps,
+		}
+		container.SetHypotheticalNspid()
+		for _, ps := range container.Processes {
+			//fmt.Printf("pid:%d,nspid:%d\n ", ps.Pid(), ps.NsPid())
+			if ps.NsPid() > 0 {
+				if s, ok := pidMap.Get(strconv.FormatInt(ps.Pid(), 10)); ok {
+					//fmt.Printf("pid:%d,node_id:%s\n ", ps.Pid(), s)
+					topology.ReplaceNode(topology.Nodes[s].WithLatest("inside_pid", time.Now(), strconv.FormatInt(ps.NsPid(), 10)))
+				}
+			}
 		}
 		if node, exists := getContainerTopology(id); exists {
 			replaceContainerTopology(id, SoftFinder.ParseNodeSet(node, container))

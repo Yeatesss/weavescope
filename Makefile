@@ -207,7 +207,7 @@ $(SCOPE_BACKEND_BUILD_UPTODATE): backend/*
 	@echo "build code"
 	$(SUDO) docker build -t $(SCOPE_BACKEND_BUILD_IMAGE) backend
 	$(SUDO) docker tag $(SCOPE_BACKEND_BUILD_IMAGE) $(SCOPE_BACKEND_BUILD_IMAGE):$(IMAGE_TAG)
-	#touch $@
+	touch $@
 
 # Run aws CLI from a container image so we don't have to install Python, etc.
 AWS_COMMAND=docker run $(RM) $(RUN_FLAGS) \
