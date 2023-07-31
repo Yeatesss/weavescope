@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -108,7 +109,7 @@ func getNodeSku(customNodeSku bool) string {
 			return ""
 		}
 		uuid, _ := os.ReadFile("/etc/host/ngep-sku")
-		return string(uuid)
+		return string(bytes.TrimSpace(uuid))
 	}
 
 }
