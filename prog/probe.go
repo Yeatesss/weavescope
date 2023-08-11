@@ -109,6 +109,12 @@ func getNodeSku(customNodeSku bool) string {
 			return ""
 		}
 		uuid, _ := os.ReadFile("/etc/host/ngep-sku")
+		for idx, uuidByte := range uuid {
+			if uuidByte == 0 {
+				uuid = uuid[:idx]
+				break
+			}
+		}
 		return string(bytes.TrimSpace(uuid))
 	}
 

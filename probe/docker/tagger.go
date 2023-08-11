@@ -204,6 +204,12 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			if len(portsBindingSet) > 0 {
 				node = node.WithSet("bind_ports", portsBindingSet)
 			}
+		} else {
+			process := yprocess.NewProcess(int64(pid), nil)
+			nspid := getNsPid(process)
+			node = node.WithLatest("inside_pid", time.Now(), nspid)
+			node = node.WithLatest("exe", time.Now(), getExe(process))
+			node = node.WithLatest("user", time.Now(), getUser(process))
 		}
 
 		node = node.WithLatest("is_container", time.Now(), "1")
