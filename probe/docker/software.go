@@ -20,6 +20,7 @@ var softwareFinderSingle = singleflight.Group{}
 type SoftwareFinder struct {
 	CtrSofts    *freecache.Cache
 	EnvPath     *freecache.Cache
+	Labels      *freecache.Cache
 	ContainerCh chan *core.Container
 }
 
@@ -31,6 +32,7 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 		ContainerCh: ctrCh,
 		CtrSofts:    freecache.NewCache(10 * 1024 * 1024),
 		EnvPath:     freecache.NewCache(5 * 1024 * 1024),
+		Labels:      freecache.NewCache(5 * 1024 * 1024),
 	}
 	go func() {
 		var works = sync.Map{}
@@ -51,8 +53,10 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 
 				softwareFinderSingle.Do(container.Id, func() (interface{}, error) {
 					var softMap = map[string]map[string]*core.Software{"web": make(map[string]*core.Software), "database": make(map[string]*core.Software)}
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 					defer cancel()
+					fmt.Println(jsoniter.MarshalToString(container))
+
 					softWares, err := container_software.NewFinder().Find(ctx, container)
 					if err != nil {
 						return nil, err

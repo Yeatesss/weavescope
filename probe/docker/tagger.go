@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"fmt"
 	"github.com/Yeatesss/container-software/core"
 	"github.com/Yeatesss/container-software/pkg/command"
 	yprocess "github.com/Yeatesss/container-software/pkg/proc/process"
@@ -149,6 +150,13 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 					break
 				}
 			}
+			var labels []string
+			for key, label := range c.Container().Config.Labels {
+				labels = append(labels, fmt.Sprintf("%s:%s", key, label))
+			}
+			if len(labels) > 0 {
+				SoftFinder.Labels.Set([]byte(containerID), []byte(strings.Join(labels, "[,]")), 0)
+			}
 			var processes core.Processes
 			processes, ok = ctrProcess.Get(containerID)
 			if !ok {
@@ -191,7 +199,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			nspid := getNsPid(process)
 			node = node.WithLatest("inside_pid", time.Now(), nspid)
 			node = node.WithLatest("exe", time.Now(), getExe(process))
-			node = node.WithLatest("user", time.Now(), getUser(process))
+			node = node.WithLatest("user", time.Now(), getUser(process, "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))
 			for _, endpoint := range endpoints {
 				var tmpData = make([]string, 4, 4)
 				portBinding := getBindingPortsSet(t.registry, containerID, endpoint.Port)
@@ -209,7 +217,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			nspid := getNsPid(process)
 			node = node.WithLatest("inside_pid", time.Now(), nspid)
 			node = node.WithLatest("exe", time.Now(), getExe(process))
-			node = node.WithLatest("user", time.Now(), getUser(process))
+			node = node.WithLatest("user", time.Now(), getUser(process, "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))
 		}
 
 		node = node.WithLatest("is_container", time.Now(), "1")
@@ -229,9 +237,19 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 	}
 	ctrProcess.Iter(func(id string, ps core.Processes) (stop bool) {
 		envPath, _ := SoftFinder.EnvPath.Get([]byte(id))
+		labels, _ := SoftFinder.Labels.Get([]byte(id))
+		labelMap := make(map[string]string)
+		if len(labels) > 0 {
+			exlabels := strings.Split(string(labels), "[,]")
+			for _, exlabel := range exlabels {
+				labelMap[strings.Split(exlabel, ":")[0]] = strings.Split(exlabel, ":")[1]
+
+			}
+		}
 		container := &core.Container{
 			Id:        id,
 			EnvPath:   string(envPath),
+			Labels:    labelMap,
 			Processes: ps,
 		}
 		container.SetHypotheticalNspid()
@@ -306,10 +324,10 @@ func getExe(ps yprocess.Process) string {
 	}
 	return ""
 }
-func getUser(ps yprocess.Process) string {
+func getUser(ps yprocess.Process, envPath string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	user, err := core.GetRunUser(ctx, ps)
+	user, err := core.GetRunUser(ctx, ps, envPath)
 	if err != nil {
 		log.Errorf("Get process user fail:%v", ps.Pid())
 		return ""
