@@ -62,6 +62,8 @@ require (
 
 require (
 	github.com/charmbracelet/log v0.2.2
+	github.com/klauspost/compress v1.11.13
+	github.com/pyroscope-io/client v0.7.1
 	golang.org/x/sync v0.3.0
 )
 
@@ -87,7 +89,6 @@ require (
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/iovisor/gobpf v0.0.0-20180826141936-4ece6c56f936 // indirect
-	github.com/klauspost/compress v1.11.13 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
@@ -112,7 +113,6 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.30.0 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
-	github.com/pyroscope-io/client v0.7.1 // indirect
 	github.com/pyroscope-io/godeltaprof v0.1.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect

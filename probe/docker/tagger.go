@@ -6,7 +6,9 @@ import (
 	"github.com/Yeatesss/container-software/core"
 	"github.com/Yeatesss/container-software/pkg/command"
 	yprocess "github.com/Yeatesss/container-software/pkg/proc/process"
+	"github.com/coocood/freecache"
 	"github.com/dolthub/swiss"
+	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"github.com/weaveworks/common/mtime"
 	"github.com/weaveworks/scope/probe/process"
@@ -49,12 +51,14 @@ func (Tagger) Name() string { return "Docker" }
 
 // Tag implements Tagger.
 func (t *Tagger) Tag(r report.Report) (report.Report, error) {
+	now := time.Now()
 	tree, err := NewProcessTreeStub(t.procWalker)
 	if err != nil {
 		return report.MakeReport(), err
 	}
 	t.tag(tree, &r.Process, &r.Container)
-
+	//fmt.Println("[time]dockerTag", time.Now().Sub(now))
+	now = time.Now()
 	// Scan for Swarm service info
 	for containerID, container := range r.Container.Nodes {
 		serviceID, ok := container.Latest.Lookup(LabelPrefix + "com.docker.swarm.service.id")
@@ -84,16 +88,30 @@ func (t *Tagger) Tag(r report.Report) (report.Report, error) {
 
 		r.Container.Nodes[containerID] = container.WithParent(report.SwarmService, nodeID)
 	}
+	//fmt.Println("[time]loopcontainer", time.Now().Sub(now))
 
 	return r, nil
 }
+
+//var now = time.Now()
+
+//	var timeso = func(mark string) {
+//
+// //		fmt.Println(fmt.Sprintf("[time]%s耗时:%v", mark, time.Now().Sub(now)))
+//
+//		now = time.Now()
+//	}
+var bindPorts = freecache.NewCache(1024 * 64)
+var nsPids = freecache.NewCache(1024 * 64)
 
 func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopology *report.Topology) {
 	var (
 		ctrProcess = swiss.NewMap[string, core.Processes](42)
 		pidMap     = swiss.NewMap[string, string](42)
 		pses       = swiss.NewMap[int64, yprocess.Process](42)
+		ctrs       []*core.Container
 	)
+	//now = time.Now()
 	for _, node := range topology.Nodes {
 		var (
 			ok      bool
@@ -143,6 +161,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			imageName := ImageNameWithoutTag(image.RepoTags[0])
 			node = node.WithParent(report.ContainerImage, report.MakeContainerImageNodeID(imageName))
 		}
+		//timeso("单进程前")
 		if c.Container().Config.Labels["io.kubernetes.docker.type"] != "podsandbox" {
 			for _, env := range c.Container().Config.Env {
 				if strings.Contains(env, "PATH=") {
@@ -168,6 +187,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 				ps = yprocess.NewProcess(int64(pid), []int64{})
 				pses.Put(int64(pid), ps)
 			}
+			//timeso("单进程后112312")
 
 			ctrProcess.Put(containerID, append(processes, &core.Process{Process: ps}))
 			if ppidStr, ok = node.Latest.Lookup(process.PPID); ok && c.Container().State.Pid != int(pid) {
@@ -185,6 +205,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 
 				}
 			}
+			//timeso("单进程后222222")
 
 			//获取当前进程在容器内绑定端口信息
 			var (
@@ -192,14 +213,41 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 				portsBindingSet report.StringSet
 			)
 			process := yprocess.NewProcess(int64(pid), nil)
-			endpoints, err = getBindingPorts(process)
-			if err != nil {
-				log.Errorf("Cannot get container process endpoint fail : %v, error: %v", candidate, err)
+
+			if endpointByte, err := bindPorts.Get([]byte(containerID + ":" + strconv.FormatInt(process.Pid(), 10))); err == nil {
+				_ = jsoniter.Unmarshal(endpointByte, &endpoints)
+				//timeso("单进程后33333333-11111")
+
+			} else {
+				endpoints, err = getBindingPorts(process)
+				if err != nil {
+					log.Errorf("Cannot get container process endpoint fail : %v, error: %v", candidate, err)
+				} else {
+					tmpEps, _ := jsoniter.Marshal(endpoints)
+					bindPorts.Set([]byte(containerID+":"+strconv.FormatInt(process.Pid(), 10)), tmpEps, 0)
+					//timeso("单进程后33333333-22222")
+
+				}
 			}
-			nspid := getNsPid(process)
-			node = node.WithLatest("inside_pid", time.Now(), nspid)
-			node = node.WithLatest("exe", time.Now(), getExe(process))
-			node = node.WithLatest("user", time.Now(), getUser(process, "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"))
+			var (
+				nspid    string
+				tmpNspid []byte
+			)
+			if tmpNspid, err = nsPids.Get([]byte(containerID + ":" + strconv.FormatInt(process.Pid(), 10))); err == nil {
+				nspid = string(tmpNspid)
+				//timeso("单进程后33333333-3333333")
+			} else {
+				nspid = getNsPid(process)
+				nsPids.Set([]byte(containerID+":"+strconv.FormatInt(process.Pid(), 10)), []byte(nspid), 0)
+				//timeso("单进程后33333333-4444444")
+			}
+			node = node.WithLatests(map[string]string{
+				"inside_pid": nspid,
+				"exe":        getExe(process),
+				"user":       getUser(process, "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"),
+			})
+			//timeso("单进程后33333333")
+
 			for _, endpoint := range endpoints {
 				var tmpData = make([]string, 4, 4)
 				portBinding := getBindingPortsSet(t.registry, containerID, endpoint.Port)
@@ -212,6 +260,8 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			if len(portsBindingSet) > 0 {
 				node = node.WithSet("bind_ports", portsBindingSet)
 			}
+			//timeso("单进程后44444444")
+
 		} else {
 			process := yprocess.NewProcess(int64(pid), nil)
 			nspid := getNsPid(process)
@@ -222,7 +272,10 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 
 		node = node.WithLatest("is_container", time.Now(), "1")
 		topology.ReplaceNode(node)
+		//timeso("单进程后")
+
 	}
+	//timeso("遍历进程")
 	var containerLocker sync.RWMutex
 	var getContainerTopology = func(containerID string) (node report.Node, exists bool) {
 		containerLocker.RLock()
@@ -235,6 +288,9 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		containerTopology.Nodes[report.MakeContainerNodeID(containerID)] = node
 		return
 	}
+	//timeso("开始遍历容器进程")
+
+	var wg sync.WaitGroup
 	ctrProcess.Iter(func(id string, ps core.Processes) (stop bool) {
 		envPath, _ := SoftFinder.EnvPath.Get([]byte(id))
 		labels, _ := SoftFinder.Labels.Get([]byte(id))
@@ -246,14 +302,28 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 
 			}
 		}
+
 		container := &core.Container{
 			Id:        id,
 			EnvPath:   string(envPath),
 			Labels:    labelMap,
 			Processes: ps,
 		}
-		container.SetHypotheticalNspid()
-		for _, ps := range container.Processes {
+		ctrs = append(ctrs, container)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			container.SetHypotheticalNspid()
+		}()
+
+		return false
+	})
+
+	wg.Wait()
+	//timeso("遍历容器进程")
+
+	for _, ctr := range ctrs {
+		for _, ps := range ctr.Processes {
 			//fmt.Printf("pid:%d,nspid:%d\n ", ps.Pid(), ps.NsPid())
 			if ps.NsPid() > 0 {
 				if s, ok := pidMap.Get(strconv.FormatInt(ps.Pid(), 10)); ok {
@@ -262,11 +332,11 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 				}
 			}
 		}
-		if node, exists := getContainerTopology(id); exists {
-			replaceContainerTopology(id, SoftFinder.ParseNodeSet(node, container))
+		if node, exists := getContainerTopology(ctr.Id); exists {
+			replaceContainerTopology(ctr.Id, SoftFinder.ParseNodeSet(node, ctr))
 		}
-		return false
-	})
+	}
+	//timeso("遍历容器")
 
 }
 

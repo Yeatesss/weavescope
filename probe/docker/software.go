@@ -55,7 +55,7 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 					var softMap = map[string]map[string]*core.Software{"web": make(map[string]*core.Software), "database": make(map[string]*core.Software)}
 					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 					defer cancel()
-					fmt.Println(jsoniter.MarshalToString(container))
+					//fmt.Println(jsoniter.MarshalToString(container))
 
 					softWares, err := container_software.NewFinder().Find(ctx, container)
 					if err != nil {

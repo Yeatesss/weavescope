@@ -2,11 +2,40 @@ package report_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/test/reflect"
 )
 
+func BenchmarkLatestSet(b *testing.B) {
+
+	for i := 0; i < b.N; i++ {
+		var node report.Node
+		node.WithLatest("1111111", time.Now(), "11111111")
+		node.WithLatest("2222222", time.Now(), "2222222")
+		node.WithLatest("33333333", time.Now(), "33333333")
+		node.WithLatest("9999999", time.Now(), "9999999")
+		node.WithLatest("1231231", time.Now(), "1231231")
+		node.WithLatest("feawfaw123", time.Now(), "vgrgrae123")
+		node.WithLatest("graegr11", time.Now(), "gfsbshtgrst123")
+	}
+}
+func BenchmarkLatestSetbatch(b *testing.B) {
+
+	for i := 0; i < b.N; i++ {
+		var node report.Node
+		node.WithLatests(map[string]string{
+			"1111111":    "11111111",
+			"2222222":    "2222222",
+			"33333333":   "33333333",
+			"9999999":    "9999999",
+			"1231231":    "1231231",
+			"feawfaw123": "vgrgrae123",
+			"graegr11":   "gfsbshtgrst123",
+		})
+	}
+}
 func TestMakeStringSet(t *testing.T) {
 	for _, testcase := range []struct {
 		input []string
