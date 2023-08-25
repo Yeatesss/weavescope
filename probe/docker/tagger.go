@@ -51,14 +51,12 @@ func (Tagger) Name() string { return "Docker" }
 
 // Tag implements Tagger.
 func (t *Tagger) Tag(r report.Report) (report.Report, error) {
-	now := time.Now()
 	tree, err := NewProcessTreeStub(t.procWalker)
 	if err != nil {
 		return report.MakeReport(), err
 	}
 	t.tag(tree, &r.Process, &r.Container)
 	//fmt.Println("[time]dockerTag", time.Now().Sub(now))
-	now = time.Now()
 	// Scan for Swarm service info
 	for containerID, container := range r.Container.Nodes {
 		serviceID, ok := container.Latest.Lookup(LabelPrefix + "com.docker.swarm.service.id")

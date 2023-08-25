@@ -86,6 +86,11 @@ prog/staticui/staticui.go: client/build/index.html
 prog/externalui/externalui.go: client/build-external/index.html
 
 ifeq ($(BUILD_IN_CONTAINER),true)
+$(SCOPE_BACKEND_BUILD_UPTODATE): backend/*
+	@echo "build code"
+	$(SUDO) docker build -t $(SCOPE_BACKEND_BUILD_IMAGE) backend
+	$(SUDO) docker tag $(SCOPE_BACKEND_BUILD_IMAGE) $(SCOPE_BACKEND_BUILD_IMAGE):$(IMAGE_TAG)
+	#touch $@
 
 $(SCOPE_EXE) $(RUNSVINIT) lint tests shell prog/staticui/staticui.go prog/externalui/externalui.go: $(SCOPE_BACKEND_BUILD_UPTODATE)
 	@mkdir -p $(shell pwd)/.pkg
@@ -203,11 +208,7 @@ client/build-external/index.html: $(SCOPE_UI_TOOLCHAIN_UPTODATE)
 
 endif
 
-$(SCOPE_BACKEND_BUILD_UPTODATE): backend/*
-	@echo "build code"
-	$(SUDO) docker build -t $(SCOPE_BACKEND_BUILD_IMAGE) backend
-	$(SUDO) docker tag $(SCOPE_BACKEND_BUILD_IMAGE) $(SCOPE_BACKEND_BUILD_IMAGE):$(IMAGE_TAG)
-	touch $@
+
 
 # Run aws CLI from a container image so we don't have to install Python, etc.
 AWS_COMMAND=docker run $(RM) $(RUN_FLAGS) \
