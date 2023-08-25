@@ -1,7 +1,7 @@
 package expected
 
 import (
-	"github.com/weaveworks/scope/probe/docker"
+	docker2 "github.com/weaveworks/scope/probe/cri/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/probe/process"
 	"github.com/weaveworks/scope/render"
@@ -35,7 +35,7 @@ var (
 	processNode           = node(report.Process)
 	processNameNode       = node(render.MakeGroupNodeTopology(report.Process, process.Name))
 	container             = node(report.Container)
-	containerHostnameNode = node(render.MakeGroupNodeTopology(report.Container, docker.ContainerHostname))
+	containerHostnameNode = node(render.MakeGroupNodeTopology(report.Container, docker2.ContainerHostname))
 	containerImage        = node(report.ContainerImage)
 	pod                   = node(report.Pod)
 	service               = node(report.Service)
@@ -163,10 +163,10 @@ var (
 	RenderedContainers = report.Nodes{
 		fixture.ClientContainerNodeID: container(fixture.ClientContainerNodeID, fixture.ServerContainerNodeID).
 			WithLatests(map[string]string{
-				report.HostNodeID:    fixture.ClientHostNodeID,
-				docker.ContainerID:   fixture.ClientContainerID,
-				docker.ContainerName: fixture.ClientContainerName,
-				docker.ImageName:     fixture.ClientContainerImageName,
+				report.HostNodeID:     fixture.ClientHostNodeID,
+				docker2.ContainerID:   fixture.ClientContainerID,
+				docker2.ContainerName: fixture.ClientContainerName,
+				docker2.ImageName:     fixture.ClientContainerImageName,
 			}).
 			WithChildren(report.MakeNodeSet(
 				RenderedEndpoints[fixture.Client54001NodeID],
@@ -191,7 +191,7 @@ var (
 	RenderedContainerHostnames = report.Nodes{
 		fixture.ClientContainerHostname: containerHostnameNode(fixture.ClientContainerHostname, fixture.ServerContainerHostname).
 			WithLatests(map[string]string{
-				docker.ContainerHostname: fixture.ClientContainerHostname,
+				docker2.ContainerHostname: fixture.ClientContainerHostname,
 			}).
 			AddCounter(report.Container, 1).
 			WithChildren(report.MakeNodeSet(
@@ -204,7 +204,7 @@ var (
 
 		fixture.ServerContainerHostname: containerHostnameNode(fixture.ServerContainerHostname).
 			WithLatests(map[string]string{
-				docker.ContainerHostname: fixture.ServerContainerHostname,
+				docker2.ContainerHostname: fixture.ServerContainerHostname,
 			}).
 			AddCounter(report.Container, 2).
 			WithChildren(report.MakeNodeSet(
@@ -226,8 +226,8 @@ var (
 		ClientContainerImageNodeID: containerImage(ClientContainerImageNodeID, ServerContainerImageNodeID).
 			WithLatests(map[string]string{
 				report.HostNodeID: fixture.ClientHostNodeID,
-				docker.ImageID:    fixture.ClientContainerImageID,
-				docker.ImageName:  fixture.ClientContainerImageName,
+				docker2.ImageID:   fixture.ClientContainerImageID,
+				docker2.ImageName: fixture.ClientContainerImageName,
 			}).
 			AddCounter(report.Container, 1).
 			WithChildren(report.MakeNodeSet(

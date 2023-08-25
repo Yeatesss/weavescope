@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 	"github.com/weaveworks/ps"
 )
 
@@ -82,12 +82,12 @@ func mapKeys(m ps.Map) []string {
 	return keys
 }
 
-// constants from https://github.com/ugorji/go/blob/master/codec/helper.go#L207
+// constants from https://github.com/Yeatesss/go-codec/blob/master/codec/helper.go#L207
 const (
 	containerMapKey   = 2
 	containerMapValue = 3
 	containerMapEnd   = 4
-	// from https://github.com/ugorji/go/blob/master/codec/helper.go#L152
+	// from https://github.com/Yeatesss/go-codec/blob/master/codec/helper.go#L152
 	cUTF8 = 2
 )
 

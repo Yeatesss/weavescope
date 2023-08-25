@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/websocket"
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 
 	"github.com/weaveworks/scope/app"
 	"github.com/weaveworks/scope/render/detailed"

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/weaveworks/scope/probe/cri/docker"
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
@@ -22,7 +23,6 @@ import (
 	"github.com/weaveworks/scope/app"
 	"github.com/weaveworks/scope/common/weave"
 	"github.com/weaveworks/scope/common/xfer"
-	"github.com/weaveworks/scope/probe/docker"
 )
 
 const (

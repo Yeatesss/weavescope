@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/paypal/ionet"
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 
 	fs_hook "github.com/weaveworks/common/fs"
 	"github.com/weaveworks/common/test"

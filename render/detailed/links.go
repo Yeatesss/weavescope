@@ -3,14 +3,14 @@ package detailed
 import (
 	"bytes"
 	"fmt"
+	"github.com/weaveworks/scope/probe/cri/docker"
 	"net/url"
 	"strings"
 
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/report"
 
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 )
 
 const (

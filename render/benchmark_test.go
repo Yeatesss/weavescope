@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 
 	"github.com/weaveworks/scope/render"
 	"github.com/weaveworks/scope/report"

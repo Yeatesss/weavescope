@@ -16,7 +16,7 @@ import (
 
 	"context"
 	log "github.com/sirupsen/logrus"
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 	"golang.org/x/net/context/ctxhttp"
 
 	"github.com/weaveworks/common/backoff"

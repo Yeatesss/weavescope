@@ -13,7 +13,7 @@ SCOPE_VERSION=$(shell git rev-parse --short HEAD)
 GIT_REVISION=$(shell git rev-parse HEAD)
 WEAVENET_VERSION=2.8.1
 RUNSVINIT=vendor/github.com/peterbourgon/runsvinit/runsvinit
-CODECGEN_DIR=vendor/github.com/ugorji/go/codec/codecgen
+CODECGEN_DIR=vendor/github.com/Yeatesss/go-codec/codec/codecgen
 CODECGEN_UID=0
 GET_CODECGEN_DEPS=$(shell find $(1) -maxdepth 1 -type f -name '*.go' -not -name '*_test.go' -not -name '*.codecgen.go' -not -name '*.generated.go')
 CODECGEN_TARGETS=report/report.codecgen.go render/detailed/detailed.codecgen.go
@@ -207,7 +207,6 @@ $(SCOPE_BACKEND_BUILD_UPTODATE): backend/*
 	@echo "build code"
 	$(SUDO) docker build -t $(SCOPE_BACKEND_BUILD_IMAGE) backend
 	$(SUDO) docker tag $(SCOPE_BACKEND_BUILD_IMAGE) $(SCOPE_BACKEND_BUILD_IMAGE):$(IMAGE_TAG)
-	touch $@
 
 # Run aws CLI from a container image so we don't have to install Python, etc.
 AWS_COMMAND=docker run $(RM) $(RUN_FLAGS) \

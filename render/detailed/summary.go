@@ -3,11 +3,11 @@ package detailed
 import (
 	"context"
 	"fmt"
+	docker2 "github.com/weaveworks/scope/probe/cri/docker"
 	"strings"
 
 	opentracing "github.com/opentracing/opentracing-go"
 
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/probe/overlay"
 	"github.com/weaveworks/scope/probe/process"
@@ -226,7 +226,7 @@ func processNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
 	var (
 		hostID, pid, _   = report.ParseProcessNodeID(n.ID)
 		processName, _   = n.Latest.Lookup(process.Name)
-		containerName, _ = n.Latest.Lookup(docker.ContainerName)
+		containerName, _ = n.Latest.Lookup(docker2.ContainerName)
 	)
 	switch {
 	case processName != "" && containerName != "":
@@ -253,12 +253,12 @@ func containerNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary
 	var (
 		containerName = getRenderableContainerName(n)
 		hostName      = report.ExtractHostID(n)
-		imageName, _  = n.Latest.Lookup(docker.ImageName)
+		imageName, _  = n.Latest.Lookup(docker2.ImageName)
 	)
 	base.Label = containerName
 	base.LabelMinor = hostName
 	if imageName != "" {
-		base.Rank = docker.ImageNameWithoutTag(imageName)
+		base.Rank = docker2.ImageNameWithoutTag(imageName)
 	} else if hostName != "" {
 		base.Rank = hostName
 	} else {
@@ -269,8 +269,8 @@ func containerNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary
 
 func containerImageNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
 	var (
-		imageName, _        = n.Latest.Lookup(docker.ImageName)
-		imageNameWithoutTag = docker.ImageNameWithoutTag(imageName)
+		imageName, _        = n.Latest.Lookup(docker2.ImageName)
+		imageNameWithoutTag = docker2.ImageNameWithoutTag(imageName)
 	)
 	switch {
 	case imageNameWithoutTag != "" && imageNameWithoutTag != ImageNameNone:
@@ -332,7 +332,7 @@ func podGroupNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary 
 }
 
 func swarmServiceNodeSummary(base BasicNodeSummary, n report.Node) BasicNodeSummary {
-	base.Label, _ = n.Latest.Lookup(docker.ServiceName)
+	base.Label, _ = n.Latest.Lookup(docker2.ServiceName)
 	if base.Label == "" {
 		base.Label, _ = report.ParseSwarmServiceNodeID(n.ID)
 	}
@@ -444,17 +444,17 @@ func getRenderableContainerName(nmd report.Node) string {
 		//
 		// However, the ecs-agent provides a label containing the original Container
 		// Definition name.
-		docker.LabelPrefix + AmazonECSContainerNameLabel,
+		docker2.LabelPrefix + AmazonECSContainerNameLabel,
 		// Kubernetes also mangles its Docker container names and provides a
 		// label with the original container name. However, note that this label
 		// is only provided by Kubernetes versions >= 1.2 (see
 		// https://github.com/kubernetes/kubernetes/pull/17234/ )
-		docker.LabelPrefix + KubernetesContainerNameLabel,
+		docker2.LabelPrefix + KubernetesContainerNameLabel,
 		// Marathon doesn't set any Docker labels and this is the only meaningful
 		// attribute we can find to make Scope useful without Mesos plugin
-		docker.EnvPrefix + MarathonAppIDEnv,
-		docker.ContainerName,
-		docker.ContainerHostname,
+		docker2.EnvPrefix + MarathonAppIDEnv,
+		docker2.ContainerName,
+		docker2.ContainerHostname,
 	} {
 		if label, ok := nmd.Latest.Lookup(key); ok {
 			return label

@@ -8,7 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/opentracing/opentracing-go"
 	log "github.com/sirupsen/logrus"
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 	common_controls "github.com/weaveworks/scope/common/controls"
 	"github.com/weaveworks/scope/probe/controls"
 	"github.com/weaveworks/scope/report"

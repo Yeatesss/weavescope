@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 	"github.com/weaveworks/ps"
 
 	"github.com/weaveworks/scope/test/reflect"

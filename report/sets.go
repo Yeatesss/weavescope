@@ -3,7 +3,7 @@ package report
 import (
 	"reflect"
 
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 	"github.com/weaveworks/ps"
 )
 

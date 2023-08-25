@@ -5,5 +5,5 @@
 package report
 
 import (
-	_ "github.com/ugorji/go/codec/codecgen"
+	_ "github.com/Yeatesss/go-codec/codec/codecgen"
 )

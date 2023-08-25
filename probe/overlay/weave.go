@@ -2,6 +2,7 @@ package overlay
 
 import (
 	"fmt"
+	"github.com/weaveworks/scope/probe/cri/docker"
 	"regexp"
 	"strings"
 	"sync"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/weaveworks/common/backoff"
 	"github.com/weaveworks/scope/common/weave"
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/report"
 )
 

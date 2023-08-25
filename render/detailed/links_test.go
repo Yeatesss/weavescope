@@ -1,11 +1,11 @@
 package detailed_test
 
 import (
+	"github.com/weaveworks/scope/probe/cri/docker"
 	"net/url"
 	"strings"
 	"testing"
 
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/render/detailed"
 	"github.com/weaveworks/scope/report"
