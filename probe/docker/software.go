@@ -59,14 +59,17 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 
 					softWares, err := container_software.NewFinder().Find(ctx, container)
 					if err != nil {
+						//logger.Logger.Errorf("Set Empty Software for container: %s,%v", container.Id, err)
 						return nil, err
 					}
+					fmt.Println("写入成功", container.Id)
 					if len(softWares) == 0 {
-						logger.Logger.Infof("Set Empty Software for container: %s", container.Id)
-
-						finder.CtrSofts.Set([]byte(fmt.Sprintf("%s.%s", ctr.Id, "web")), []byte(`[]`), 0)
+						//logger.Logger.Infof("Set Empty Software for container: %s", container.Id)
+						finder.CtrSofts.Set([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], "web")), []byte(`[]`), 0)
 						return nil, nil
 					}
+					logger.Logger.Infof("range container softwares: %s", container.Id)
+
 					for _, ware := range softWares {
 						if _, ok := softMap[string(ware.Type)]; !ok {
 							continue
@@ -79,13 +82,15 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 					}
 					for idx, ware := range softMap {
 						if ware != nil && len(ware) > 0 {
+							logger.Logger.Infof("set range container softwares: %s,%s", container.Id, container.Labels["master_pid"])
+
 							var sets []string
 							for _, software := range ware {
 								s, _ := jsoniter.MarshalToString(software)
 								sets = append(sets, s)
 							}
 							val, _ := jsoniter.Marshal(sets)
-							key := fmt.Sprintf("%s.%s", container.Id, idx)
+							key := fmt.Sprintf("%s%s.%s", container.Id, container.Labels["master_pid"], idx)
 							err := finder.CtrSofts.Set([]byte(key), val, 0)
 							if err != nil {
 								return nil, err
@@ -104,7 +109,7 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) report.Node {
 	var hit bool
 	for _, softType := range []string{"web", "database"} {
-		if v, err := s.CtrSofts.Get([]byte(fmt.Sprintf("%s.%s", ctr.Id, softType))); err == nil {
+		if v, err := s.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], softType))); err == nil {
 			var softs []string
 			//logger.Logger.Infof("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
 			if err := jsoniter.Unmarshal(v, &softs); err == nil {
@@ -124,8 +129,8 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 		select {
 		case s.ContainerCh <- ctr:
 		default:
-			//fmt.Println("阻塞", ctr.Id)
-			fmt.Println(len(s.ContainerCh))
+			fmt.Println("阻塞", ctr.Id)
+			//fmt.Println(len(s.ContainerCh))
 		}
 
 	}
