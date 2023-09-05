@@ -94,7 +94,25 @@ func (t *Tagger) Tag(r report.Report) (report.Report, error) {
 
 var bindPorts = freecache.NewCache(1024 * 64)
 var nsPids = freecache.NewCache(1024 * 64)
+var suspectMap = freecache.NewCache(1024 * 1024)
 
+func SetSuspectMap(containerID, imageName string) {
+	if strings.Contains(imageName, "mongo") ||
+		strings.Contains(imageName, "postgre") ||
+		strings.Contains(imageName, "redis") ||
+		strings.Contains(imageName, "sqlserver") ||
+		strings.Contains(imageName, "jboss") ||
+		strings.Contains(imageName, "nginx") {
+		suspectMap.Set([]byte(containerID), []byte("1"), 60)
+	} else {
+		suspectMap.Set([]byte(containerID), []byte("0"), 60)
+	}
+}
+func GetSuspectMap(containerID string) bool {
+	exists, _ := suspectMap.Get([]byte(containerID))
+	return string(exists) == "1"
+
+}
 func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopology *report.Topology) {
 	var (
 		ctrProcess = swiss.NewMap[string, core.Processes](42)
@@ -139,6 +157,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		if c == nil || ContainerIsStopped(c) || c.PID() == 1 {
 			continue
 		}
+
 		pidMap.Put(pidStr, node.ID)
 		//以下操作在当前进程存在对应容器的基础上
 		var containerID = c.ID()
@@ -149,6 +168,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		image, ok := t.registry.GetContainerImage(c.Image())
 		if ok && len(image.RepoTags) > 0 {
 			imageName := ImageNameWithoutTag(image.RepoTags[0])
+			SetSuspectMap(containerID, imageName)
 			node = node.WithParent(report.ContainerImage, report.MakeContainerImageNodeID(imageName))
 		}
 		if c.Container().Config.Labels["io.kubernetes.docker.type"] != "podsandbox" {
