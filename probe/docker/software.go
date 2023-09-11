@@ -43,7 +43,7 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 	}
 	go func() {
 		var works = sync.Map{}
-		var concurrent = make(chan struct{}, 5)
+		var concurrent = make(chan struct{}, 2)
 		for ctr := range ctrCh {
 			if _, ok := works.Load(ctr.Id); ok {
 				continue
@@ -56,24 +56,32 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 					<-concurrent
 					works.Delete(container.Id)
 				}()
-				//logger.Logger.Infof("Get Software: %s", container.Id)
+				//logger.Logger.Debugf("Get Software: %s", container.Id)
 
 				softwareFinderSingle.Do(container.Id, func() (interface{}, error) {
-					var softMap = map[string]map[string]*core.Software{"web": make(map[string]*core.Software), "database": make(map[string]*core.Software)}
-					ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
-					defer cancel()
-					//fmt.Println(jsoniter.MarshalToString(container))
+					webSoft, _ := finder.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], "web")))
+					dbSoft, _ := finder.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], "database")))
+					if len(dbSoft) > 0 || len(webSoft) > 0 {
+						return nil, nil
+					}
 
+					var softMap = map[string]map[string]*core.Software{"web": make(map[string]*core.Software), "database": make(map[string]*core.Software)}
+					ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second*time.Duration(container.Container.Processes.Len())*1*time.Second)
+					defer cancel()
+					logger.Logger.Debug("start collect software", "container_id", container.Id, "time", time.Now().Format("2006-01-02 15:04:05"))
 					softWares, err := container_software.NewFinder().Find(ctx, container.Container)
+					logger.Logger.Debug("finish collect software", "container_id", container.Id, "time", time.Now().Format("2006-01-02 15:04:05"))
+					a, _ := jsoniter.MarshalToString(container)
+					s, _ := jsoniter.MarshalToString(softWares)
+					logger.Logger.Debugf("Find Software:%s,Data:%s\nsoft:%s", container.Id, a, s)
+
 					if err != nil {
-						//logger.Logger.Errorf("Set Empty Software for container: %s,%v", container.Id, err)
+						logger.Logger.Errorf("Find ctr software error: %s,%v", container.Id, err)
 						return nil, err
 					}
-					fmt.Println("写入成功", container.Id)
 					if len(softWares) == 0 {
-						if container.suspect {
-							container.retryAfter = container.retryAfter * 2
-						}
+						container.retryAfter = container.retryAfter * 2
+
 						if container.suspect && container.retryAfter > 60*60*time.Second {
 							container.retryAfter = 60 * 60 * time.Second
 						}
@@ -82,10 +90,12 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 						}
 						go func() {
 							time.Sleep(container.retryAfter)
-							logger.Logger.Infof("Try again to get container applications: %s", container.Id)
+							logger.Logger.Debugf("Try again to get container applications: %s", container.Id)
 							finder.ContainerCh <- container
 						}()
-						//logger.Logger.Infof("Set Empty Software for container: %s", container.Id)
+						fmt.Println("写入成功", container.Id)
+						logger.Logger.Debugf("Set Empty Software for container: %s", container.Id)
+
 						finder.CtrSofts.Set([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], "web")), []byte(`[]`), 0)
 						return nil, nil
 					}
@@ -132,7 +142,7 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 	for _, softType := range []string{"web", "database"} {
 		if v, err := s.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], softType))); err == nil {
 			var softs []string
-			//logger.Logger.Infof("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
+			logger.Logger.Debugf("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
 			if err := jsoniter.Unmarshal(v, &softs); err == nil {
 				hit = true
 				if len(softs) > 0 {
@@ -146,11 +156,11 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 		}
 	}
 	if !hit {
-		//logger.Logger.Infof("Parse Software Not Hit:%s", ctr.Id)
+		logger.Logger.Infof("Parse Software Not Hit:%s", ctr.Id)
 		select {
 		case s.ContainerCh <- &FindContainer{
 			Container:  ctr,
-			retryAfter: 2 * time.Second,
+			retryAfter: 20 * time.Second,
 			suspect:    GetSuspectMap(ctr.Id),
 		}:
 		default:

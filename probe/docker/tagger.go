@@ -12,6 +12,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"github.com/weaveworks/common/mtime"
+	"github.com/weaveworks/scope/common/logger"
 	"github.com/weaveworks/scope/probe/process"
 	"github.com/weaveworks/scope/report"
 	"math/rand"
@@ -289,6 +290,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 	}
 	var replaceContainerTopology = func(containerID string, node report.Node) {
 		containerLocker.RLock()
+		defer containerLocker.RUnlock()
 		containerTopology.Nodes[report.MakeContainerNodeID(containerID)] = node
 		return
 	}
@@ -302,7 +304,6 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			exlabels := strings.Split(string(labels), "[,]")
 			for _, exlabel := range exlabels {
 				labelMap[strings.Split(exlabel, ":")[0]] = strings.Split(exlabel, ":")[1]
-
 			}
 		}
 		container := &core.Container{
@@ -324,11 +325,10 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 	wg.Wait()
 
 	for _, ctr := range ctrs {
+		logger.Logger.Debug("Range container to add soft", "container_id", ctr.Id)
 		for _, ps := range ctr.Processes {
-			//fmt.Printf("pid:%d,nspid:%d\n ", ps.Pid(), ps.NsPid())
 			if ps.NsPid() > 0 {
 				if s, ok := pidMap.Get(strconv.FormatInt(ps.Pid(), 10)); ok {
-					//fmt.Printf("pid:%d,node_id:%s\n ", ps.Pid(), s)
 					topology.ReplaceNode(topology.Nodes[s].WithLatest("inside_pid", time.Now(), strconv.FormatInt(ps.NsPid(), 10)))
 				}
 			}
@@ -421,7 +421,7 @@ func getUser(ps yprocess.Process, envPath string) string {
 
 		}
 	}()
-	userByte, _ = execCache.Get([]byte(pidStr))
+	userByte, _ = userCache.Get([]byte(pidStr))
 	if len(userByte) > 0 {
 		return string(userByte)
 	}
