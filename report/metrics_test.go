@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 
 	"github.com/weaveworks/common/test"
 	"github.com/weaveworks/scope/report"

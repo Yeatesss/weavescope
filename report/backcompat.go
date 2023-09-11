@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 )
 
 // For backwards-compatibility with probes that sent a map of latestControls data
@@ -59,7 +59,6 @@ func (n *Node) CodecEncodeSelf(encoder *codec.Encoder) {
 }
 
 // Upgrade returns a new report based on a report received from the old probe.
-//
 func (r Report) Upgrade() Report {
 	return r.upgradePodNodes().upgradeNamespaces().upgradeDNSRecords()
 }

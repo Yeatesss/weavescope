@@ -2,6 +2,7 @@ package kubernetes_test
 
 import (
 	"fmt"
+	docker2 "github.com/weaveworks/scope/probe/cri/docker"
 	"io"
 	"io/ioutil"
 	"strings"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/weaveworks/scope/common/xfer"
 	"github.com/weaveworks/scope/probe/controls"
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/test/reflect"
@@ -346,22 +346,22 @@ func BenchmarkReporter(b *testing.B) {
 func TestTagger(t *testing.T) {
 	rpt := report.MakeReport()
 	rpt.ContainerImage.AddNode(report.MakeNodeWith("image1", map[string]string{
-		docker.ImageName: "weaveworks/some_interesting_image",
+		docker2.ImageName: "weaveworks/some_interesting_image",
 	}))
 	rpt.ContainerImage.AddNode(report.MakeNodeWith("pause_image", map[string]string{
-		docker.ImageName: "google_containers/pause",
+		docker2.ImageName: "google_containers/pause",
 	}))
 	rpt.Container.AddNode(report.MakeNodeWith("container1", map[string]string{
-		docker.LabelPrefix + "io.kubernetes.pod.uid": "123456",
+		docker2.LabelPrefix + "io.kubernetes.pod.uid": "123456",
 	}).WithParent(report.ContainerImage, "image1"))
 	// This is the first way that Scope identified a pause container - via image name
 	rpt.Container.AddNode(report.MakeNodeWith("container2", map[string]string{
-		docker.LabelPrefix + "io.kubernetes.pod.uid": "123456",
+		docker2.LabelPrefix + "io.kubernetes.pod.uid": "123456",
 	}).WithParent(report.ContainerImage, "pause_image"))
 	// Second way that Scope identifies a pause container - via docker.type label
 	rpt.Container.AddNode(report.MakeNodeWith("container3", map[string]string{
-		docker.LabelPrefix + "io.kubernetes.pod.uid":     "123456",
-		docker.LabelPrefix + "io.kubernetes.docker.type": "podsandbox",
+		docker2.LabelPrefix + "io.kubernetes.pod.uid":     "123456",
+		docker2.LabelPrefix + "io.kubernetes.docker.type": "podsandbox",
 	}))
 
 	rpt, err := (&kubernetes.Tagger{}).Tag(rpt)

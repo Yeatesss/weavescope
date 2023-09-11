@@ -3,19 +3,19 @@ package app_test
 import (
 	"bytes"
 	"context"
+	"github.com/weaveworks/scope/probe/cri/docker"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 
+	"github.com/Yeatesss/go-codec/codec"
 	"github.com/gorilla/mux"
-	"github.com/ugorji/go/codec"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/weaveworks/common/test"
 	"github.com/weaveworks/scope/app"
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/render"
 	"github.com/weaveworks/scope/render/detailed"

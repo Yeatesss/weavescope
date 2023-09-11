@@ -1,11 +1,11 @@
 package detailed
 
 import (
+	"github.com/weaveworks/scope/probe/cri/docker"
 	"sort"
 
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/probe/process"
 	"github.com/weaveworks/scope/report"

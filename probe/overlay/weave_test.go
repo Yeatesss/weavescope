@@ -1,10 +1,10 @@
 package overlay_test
 
 import (
+	"github.com/weaveworks/scope/probe/cri/docker"
 	"testing"
 	"time"
 
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/overlay"
 	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/test"

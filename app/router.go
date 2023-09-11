@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"github.com/weaveworks/scope/app/httpclient"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,7 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/weaveworks/scope/app/httpclient"
+
 	"context"
+
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -248,7 +250,6 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 			}
 			if clusterNodes != nil {
 				clusterNodes.nodes.Iter(func(k string, v *Node) (stop bool) {
-					fmt.Println(k, v.NodeRole)
 					return false
 				})
 			}

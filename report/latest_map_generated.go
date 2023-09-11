@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 )
 
 type stringLatestEntry struct {

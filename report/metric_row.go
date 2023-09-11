@@ -1,7 +1,7 @@
 package report
 
 import (
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 )
 
 // DefaultFormat and friends tell the UI how to render the "Value" of this

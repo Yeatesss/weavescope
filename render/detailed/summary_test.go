@@ -2,13 +2,13 @@ package detailed_test
 
 import (
 	"context"
+	docker2 "github.com/weaveworks/scope/probe/cri/docker"
 	"sort"
 	"testing"
 	"time"
 
 	"github.com/weaveworks/common/mtime"
 	"github.com/weaveworks/common/test"
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/process"
 	"github.com/weaveworks/scope/render"
 	"github.com/weaveworks/scope/render/detailed"
@@ -132,8 +132,8 @@ func TestMakeNodeSummary(t *testing.T) {
 					Tag:        "",
 				},
 				Metadata: []report.MetadataRow{
-					{ID: docker.ImageName, Label: "Image name", Value: fixture.ClientContainerImageName, Priority: 2},
-					{ID: docker.ContainerID, Label: "ID", Value: fixture.ClientContainerID, Priority: 11, Truncate: 12},
+					{ID: docker2.ImageName, Label: "Image name", Value: fixture.ClientContainerImageName, Priority: 2},
+					{ID: docker2.ContainerID, Label: "ID", Value: fixture.ClientContainerID, Priority: 11, Truncate: 12},
 				},
 				Adjacency: report.MakeIDList(fixture.ServerContainerNodeID),
 			},
@@ -246,22 +246,22 @@ func TestNodeMetadata(t *testing.T) {
 		{
 			name: "container",
 			node: report.MakeNodeWith(fixture.ClientContainerNodeID, map[string]string{
-				docker.ContainerID:            fixture.ClientContainerID,
-				docker.LabelPrefix + "label1": "label1value",
-				docker.ContainerStateHuman:    report.StateRunning,
+				docker2.ContainerID:            fixture.ClientContainerID,
+				docker2.LabelPrefix + "label1": "label1value",
+				docker2.ContainerStateHuman:    report.StateRunning,
 			}).WithTopology(report.Container).WithSets(report.MakeSets().
-				Add(docker.ContainerIPs, report.MakeStringSet("10.10.10.0/24", "10.10.10.1/24")),
+				Add(docker2.ContainerIPs, report.MakeStringSet("10.10.10.0/24", "10.10.10.1/24")),
 			),
 			want: []report.MetadataRow{
-				{ID: docker.ContainerStateHuman, Label: "State", Value: "running", Priority: 4},
-				{ID: docker.ContainerIPs, Label: "IPs", Value: "10.10.10.0/24, 10.10.10.1/24", Priority: 8},
-				{ID: docker.ContainerID, Label: "ID", Value: fixture.ClientContainerID, Priority: 11, Truncate: 12},
+				{ID: docker2.ContainerStateHuman, Label: "State", Value: "running", Priority: 4},
+				{ID: docker2.ContainerIPs, Label: "IPs", Value: "10.10.10.0/24, 10.10.10.1/24", Priority: 8},
+				{ID: docker2.ContainerID, Label: "ID", Value: fixture.ClientContainerID, Priority: 11, Truncate: 12},
 			},
 		},
 		{
 			name: "unknown topology",
 			node: report.MakeNodeWith(fixture.ClientContainerNodeID, map[string]string{
-				docker.ContainerID: fixture.ClientContainerID,
+				docker2.ContainerID: fixture.ClientContainerID,
 			}).WithTopology("foobar"),
 			want: nil,
 		},
@@ -310,7 +310,7 @@ func TestNodeMetrics(t *testing.T) {
 			node: fixture.Report.Container.Nodes[fixture.ClientContainerNodeID],
 			want: []report.MetricRow{
 				{
-					ID:       docker.CPUTotalUsage,
+					ID:       docker2.CPUTotalUsage,
 					Label:    "CPU",
 					Format:   "percent",
 					Group:    "",
@@ -319,7 +319,7 @@ func TestNodeMetrics(t *testing.T) {
 					Metric:   &fixture.ClientContainerCPUMetric,
 				},
 				{
-					ID:       docker.MemoryUsage,
+					ID:       docker2.MemoryUsage,
 					Label:    "Memory",
 					Format:   "filesize",
 					Group:    "",
@@ -417,24 +417,24 @@ func TestNodeTables(t *testing.T) {
 			name: "container",
 			rpt: report.Report{
 				Container: report.MakeTopology().
-					WithTableTemplates(docker.ContainerTableTemplates),
+					WithTableTemplates(docker2.ContainerTableTemplates),
 			},
 			node: report.MakeNodeWith(fixture.ClientContainerNodeID, map[string]string{
-				docker.ContainerID:            fixture.ClientContainerID,
-				docker.LabelPrefix + "label1": "label1value",
-				docker.ContainerState:         report.StateRunning,
+				docker2.ContainerID:            fixture.ClientContainerID,
+				docker2.LabelPrefix + "label1": "label1value",
+				docker2.ContainerState:         report.StateRunning,
 			}).WithTopology(report.Container).WithSets(report.MakeSets().
-				Add(docker.ContainerIPs, report.MakeStringSet("10.10.10.0/24", "10.10.10.1/24")),
+				Add(docker2.ContainerIPs, report.MakeStringSet("10.10.10.0/24", "10.10.10.1/24")),
 			),
 			want: []report.Table{
 				{
-					ID:    docker.EnvPrefix,
+					ID:    docker2.EnvPrefix,
 					Type:  report.PropertyListType,
 					Label: "Environment variables",
 					Rows:  []report.Row{},
 				},
 				{
-					ID:    docker.LabelPrefix,
+					ID:    docker2.LabelPrefix,
 					Type:  report.PropertyListType,
 					Label: "Docker labels",
 					Rows: []report.Row{
@@ -448,7 +448,7 @@ func TestNodeTables(t *testing.T) {
 					},
 				},
 				{
-					ID:    docker.ImageTableID,
+					ID:    docker2.ImageTableID,
 					Type:  report.PropertyListType,
 					Label: "Image",
 					Rows:  []report.Row{},
@@ -459,7 +459,7 @@ func TestNodeTables(t *testing.T) {
 			name: "unknown topology",
 			rpt:  report.MakeReport(),
 			node: report.MakeNodeWith(fixture.ClientContainerNodeID, map[string]string{
-				docker.ContainerID: fixture.ClientContainerID,
+				docker2.ContainerID: fixture.ClientContainerID,
 			}).WithTopology("foobar"),
 			want: nil,
 		},

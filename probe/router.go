@@ -5,10 +5,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"github.com/Yeatesss/go-codec/codec"
 	"github.com/gorilla/mux"
 	"github.com/opentracing/opentracing-go"
 	log "github.com/sirupsen/logrus"
-	"github.com/ugorji/go/codec"
 	common_controls "github.com/weaveworks/scope/common/controls"
 	"github.com/weaveworks/scope/probe/controls"
 	"github.com/weaveworks/scope/report"
@@ -56,7 +56,7 @@ func requestContextDecorator(f CtxHandlerFunc) http.HandlerFunc {
 func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 	ReportPublisher
 	controls.PipeClient
-}, controlMap map[string]chan *common_controls.ControlAction) {
+}, controlChan chan *common_controls.ControlAction) {
 	post := router.Methods("POST").Subrouter()
 	post.HandleFunc("/api/redirect-report", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 		var (
@@ -90,7 +90,7 @@ func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
-	if control, ok := controlMap["docker"]; ok {
+	if controlChan != nil {
 		post.HandleFunc("/api/docker-container/pause", requestContextDecorator(func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 			var ids = struct {
 				ContainerId string `json:"container_id"`
@@ -102,7 +102,7 @@ func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 			}
 			controlResp := make(chan interface{}, 1)
 			defer close(controlResp)
-			control <- &common_controls.ControlAction{
+			controlChan <- &common_controls.ControlAction{
 				Type:   "container",
 				Action: "pause",
 				ID:     ids.ContainerId,
@@ -129,7 +129,7 @@ func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 			}
 			controlResp := make(chan interface{}, 1)
 			defer close(controlResp)
-			control <- &common_controls.ControlAction{
+			controlChan <- &common_controls.ControlAction{
 				Type:   "container",
 				Action: "stop",
 				ID:     ids.ContainerId,
@@ -156,7 +156,7 @@ func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 			}
 			controlResp := make(chan interface{}, 1)
 			defer close(controlResp)
-			control <- &common_controls.ControlAction{
+			controlChan <- &common_controls.ControlAction{
 				Type:   "container",
 				Action: "remove",
 				ID:     ids.ContainerId,
@@ -183,7 +183,7 @@ func RegisterRedirectReportPostHandler(router *mux.Router, client interface {
 			}
 			controlResp := make(chan interface{}, 1)
 			defer close(controlResp)
-			control <- &common_controls.ControlAction{
+			controlChan <- &common_controls.ControlAction{
 				Type:   "container",
 				Action: "unpause",
 				ID:     ids.ContainerId,

@@ -4,7 +4,7 @@ import (
 	"github.com/weaveworks/common/mtime"
 	"github.com/weaveworks/scope/probe"
 	"github.com/weaveworks/scope/probe/controls"
-	"github.com/weaveworks/scope/probe/docker"
+	docker2 "github.com/weaveworks/scope/probe/cri/docker"
 	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/tools/vars"
 	"k8s.io/apimachinery/pkg/labels"
@@ -46,7 +46,7 @@ var (
 		RestartCount:     {ID: RestartCount, Label: "Restart #", From: report.FromLatest, Priority: 7},
 	}
 
-	PodMetricTemplates = docker.ContainerMetricTemplates
+	PodMetricTemplates = docker2.ContainerMetricTemplates
 
 	ServiceMetadataTemplates = report.MetadataTemplates{
 		Namespace:  {ID: Namespace, Label: "Namespace", From: report.FromLatest, Priority: 2},
@@ -273,7 +273,7 @@ func isPauseContainer(n report.Node, rpt report.Report) bool {
 		if !ok {
 			continue
 		}
-		imageName, ok := imageNode.Latest.Lookup(docker.ImageName)
+		imageName, ok := imageNode.Latest.Lookup(docker2.ImageName)
 		if !ok {
 			continue
 		}
@@ -311,7 +311,7 @@ func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
 	}
 
 	for id, n := range rpt.Container.Nodes {
-		uid, ok := n.Latest.Lookup(docker.LabelPrefix + "io.kubernetes.pod.uid")
+		uid, ok := n.Latest.Lookup(docker2.LabelPrefix + "io.kubernetes.pod.uid")
 		if !ok {
 			continue
 		}

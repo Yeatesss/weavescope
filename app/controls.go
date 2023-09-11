@@ -5,9 +5,9 @@ import (
 	"net/rpc"
 
 	"context"
+	"github.com/Yeatesss/go-codec/codec"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
-	"github.com/ugorji/go/codec"
 
 	"github.com/weaveworks/scope/common/xfer"
 )

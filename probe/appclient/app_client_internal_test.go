@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Yeatesss/go-codec/codec"
 	"github.com/gorilla/handlers"
-	"github.com/ugorji/go/codec"
 	"github.com/weaveworks/common/test"
 	"github.com/weaveworks/scope/common/xfer"
 	"github.com/weaveworks/scope/report"

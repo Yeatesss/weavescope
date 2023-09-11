@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/Yeatesss/go-codec/codec"
 	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/ugorji/go/codec"
 	"github.com/weaveworks/scope/report"
 
 	log "github.com/sirupsen/logrus"

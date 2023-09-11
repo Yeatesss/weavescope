@@ -15,7 +15,7 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	otlog "github.com/opentracing/opentracing-go/log"
 	log "github.com/sirupsen/logrus"
-	"github.com/ugorji/go/codec"
+	"github.com/Yeatesss/go-codec/codec"
 )
 
 // Include this in a struct to be able to call CodecDecodeSelf() before code generation

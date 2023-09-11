@@ -4,11 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/gorilla/mux"
-	uuid2 "github.com/pborman/uuid"
-	"github.com/tylerb/graceful"
-	common_controls "github.com/weaveworks/scope/common/controls"
-	"github.com/weaveworks/scope/tools/vars"
 	"math/rand"
 	"net"
 	"net/http"
@@ -17,6 +12,14 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/gorilla/mux"
+	uuid2 "github.com/pborman/uuid"
+	"github.com/tylerb/graceful"
+	common_controls "github.com/weaveworks/scope/common/controls"
+	"github.com/weaveworks/scope/probe/cri/containerd"
+	"github.com/weaveworks/scope/probe/cri/docker"
+	"github.com/weaveworks/scope/tools/vars"
 
 	log "github.com/sirupsen/logrus"
 
@@ -31,8 +34,6 @@ import (
 	"github.com/weaveworks/scope/probe"
 	"github.com/weaveworks/scope/probe/appclient"
 	"github.com/weaveworks/scope/probe/controls"
-	"github.com/weaveworks/scope/probe/cri"
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/endpoint"
 	"github.com/weaveworks/scope/probe/host"
 	"github.com/weaveworks/scope/probe/kubernetes"
@@ -123,9 +124,9 @@ func getNodeSku(customNodeSku bool) string {
 // Main runs the probe
 func probeMain(flags probeFlags, targets []appclient.Target) {
 	var (
-		hostId     = os.Getenv("PROBE_HOSTID")
-		hostID     = hostname.Get()
-		controlMap = make(map[string]chan *common_controls.ControlAction)
+		hostId      = os.Getenv("PROBE_HOSTID")
+		hostID      = hostname.Get()
+		controlChan chan *common_controls.ControlAction
 	)
 	fmt.Println("Control Collection Addr:", os.Getenv("RESOURCE_COLLECTION_ADDR"))
 
@@ -315,6 +316,30 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		defer endpointReporter.Stop()
 		p.AddReporter(endpointReporter)
 	}
+	// containerd
+	if flags.containerdEnabled {
+		containerdControlActions := make(chan *common_controls.ControlAction, 10)
+		controlChan = containerdControlActions
+		options := containerd.RegistryOptions{
+			Interval:               flags.containerdInterval,
+			Pipes:                  clients,
+			CollectStats:           true,
+			HostID:                 hostID,
+			HandlerRegistry:        handlerRegistry,
+			NoCommandLineArguments: flags.noCommandLineArguments,
+			NoEnvironmentVariables: flags.noEnvironmentVariables,
+			ControlActions:         containerdControlActions,
+		}
+		if registry, err := containerd.NewRegistry(options); err == nil {
+			defer registry.Stop()
+			if flags.procEnabled {
+				p.AddTagger(containerd.NewTagger(registry, processCache))
+			}
+			p.AddReporter(containerd.NewReporter(registry, hostID, probeID, p))
+		} else {
+			log.Errorf("Docker: failed to start registry: %v", err)
+		}
+	}
 
 	if flags.dockerEnabled {
 		// Don't add the bridge in Kubernetes since container IPs are global and
@@ -325,7 +350,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 			}
 		}
 		dockerControlActions := make(chan *common_controls.ControlAction, 10)
-		controlMap["docker"] = dockerControlActions
+		controlChan = dockerControlActions
 		options := docker.RegistryOptions{
 			Interval:               flags.dockerInterval,
 			Pipes:                  clients,
@@ -344,15 +369,6 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 			p.AddReporter(docker.NewReporter(registry, hostID, probeID, p))
 		} else {
 			log.Errorf("Docker: failed to start registry: %v", err)
-		}
-	}
-
-	if flags.criEnabled {
-		client, err := cri.NewCRIClient(flags.criEndpoint)
-		if err != nil {
-			log.Errorf("CRI: failed to start registry: %v", err)
-		} else {
-			p.AddReporter(cri.NewReporter(client))
 		}
 	}
 
@@ -411,7 +427,7 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 	//}
 
 	maybeExportProfileData(flags)
-	go httpServer(clients, controlMap)
+	go httpServer(clients, controlChan)
 
 	p.Start()
 
@@ -424,10 +440,10 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 func httpServer(client interface {
 	probe.ReportPublisher
 	controls.PipeClient
-}, controlMap map[string]chan *common_controls.ControlAction) {
+}, controlChan chan *common_controls.ControlAction) {
 	logger := logging.Logrus(log.StandardLogger())
 	router := mux.NewRouter().SkipClean(true)
-	probe.RegisterRedirectReportPostHandler(router, client, controlMap)
+	probe.RegisterRedirectReportPostHandler(router, client, controlChan)
 
 	server := &graceful.Server{
 		// we want to manage the stop condition ourselves below

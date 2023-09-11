@@ -3,10 +3,10 @@ package detailed_test
 import (
 	"context"
 	"fmt"
+	"github.com/weaveworks/scope/probe/cri/docker"
 	"testing"
 
 	"github.com/weaveworks/common/test"
-	"github.com/weaveworks/scope/probe/docker"
 	"github.com/weaveworks/scope/probe/kubernetes"
 	"github.com/weaveworks/scope/probe/process"
 	"github.com/weaveworks/scope/render"

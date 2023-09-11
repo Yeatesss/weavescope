@@ -6,12 +6,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/Yeatesss/container-software/pkg/proc/process"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Yeatesss/container-software/pkg/proc/process"
 
 	linuxproc "github.com/c9s/goprocinfo/linux"
 	"github.com/coocood/freecache"
@@ -190,7 +191,6 @@ func (w *walker) readCmdline(filename string) (cmdline, name string) {
 
 func (w *walker) readExe(filename string) (name string) {
 	if cmdlineBuf, err := fs.ReadFile(path.Join(w.procRoot, filename, "exe")); err == nil {
-		fmt.Println(path.Join(w.procRoot, filename, "exe"))
 		// like proc, treat name as the first element of command line
 		i := bytes.IndexByte(cmdlineBuf, '\000')
 
