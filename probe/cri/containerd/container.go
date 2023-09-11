@@ -3,19 +3,20 @@ package containerd
 import (
 	"context"
 	"fmt"
-	"github.com/containerd/containerd/namespaces"
-	docker "github.com/fsouza/go-dockerclient"
-	jsoniter "github.com/json-iterator/go"
-	log "github.com/sirupsen/logrus"
-	"github.com/weaveworks/common/mtime"
-	"github.com/weaveworks/scope/probe/cri"
-	"github.com/weaveworks/scope/report"
-	"io"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/containerd/nerdctl/pkg/statsutil"
+
+	"github.com/containerd/containerd/namespaces"
+	docker "github.com/fsouza/go-dockerclient"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/weaveworks/common/mtime"
+	"github.com/weaveworks/scope/probe/cri"
+	"github.com/weaveworks/scope/report"
 )
 
 // These constants are keys used in node metadata
@@ -62,11 +63,11 @@ var _ cri.Container[*docker.Container] = &container{}
 
 type container struct {
 	sync.RWMutex
-	container              *docker.Container
-	stopStats              chan<- bool
-	latestStats            docker.Stats
-	pendingStats           [60]docker.Stats
-	numPending             int
+	container   *docker.Container
+	cancelStats context.CancelFunc
+	latestStats statsutil.StatsEntry
+	//pendingStats           [60]docker.Stats
+	//numPending             int
 	hostID                 string
 	baseNode               report.Node
 	noCommandLineArguments bool
@@ -135,163 +136,51 @@ func (c *container) Container() *docker.Container {
 	return c.container
 }
 func (c *container) StartGatheringStats(client cri.StatsGatherer) error {
+	//TODO 测验容器负载收集
 	c.Lock()
 	defer c.Unlock()
 
-	if c.stopStats != nil {
+	if c.cancelStats != nil {
 		return nil
 	}
-	done := make(chan bool)
-	c.stopStats = done
-
-	stats := make(chan *docker.Stats)
-	opts := docker.StatsOptions{
-		ID:     c.container.ID,
-		Stats:  stats,
-		Stream: true,
-		Done:   done,
+	var (
+		ctx       context.Context
+		statsChan = make(chan *AllStats, 1)
+	)
+	ctx, c.cancelStats = context.WithCancel(context.Background())
+	CtrStatsLister.nsChan <- &NsChan{
+		Namespace: getNsFromContainer(*c.container),
+		Stats:     statsChan,
 	}
-
-	log.Debugf("docker container: collecting stats for %s", c.container.ID)
-
-	go func() {
-		if err := client.Stats(opts); err != nil && err != io.EOF && err != io.ErrClosedPipe {
-
-			//if err := client.GetContainerStat(client, opts); err != nil && err != io.EOF && err != io.ErrClosedPipe {
-			log.Errorf("docker container: error collecting stats for %s: %v", c.container.ID, err)
-		}
-	}()
+	allStats := <-statsChan
 
 	go func() {
-		for s := range stats {
-			c.Lock()
-			if c.numPending >= len(c.pendingStats) {
-				log.Warnf("docker container: dropping stats for %s", c.container.ID)
-			} else {
-				c.latestStats = *s
-				c.pendingStats[c.numPending] = *s
-				c.numPending++
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				task := NewGetCtrStats(c.container.ID)
+				allStats.PushTask(task)
+				stat := <-task.StatsRes
+				//fmt.Println(stat)
+				c.Lock()
+				c.latestStats = stat
 			}
 			c.Unlock()
+			time.Sleep(2 * time.Second)
 		}
-		log.Debugf("docker container: stopped collecting stats for %s", c.container.ID)
-		c.Lock()
-		if c.stopStats == done {
-			c.stopStats = nil
-		}
-		c.Unlock()
+
 	}()
 
 	return nil
 }
 
-//func StartGatheringStats(c *containerd.Client, opts StatsOptions) error {
-//	if opts.Stats == nil {
-//		return errors.New("can not send on nil channel")
-//	}
-//
-//	var mutex sync.Mutex
-//
-//	defer func() {
-//		mutex.Lock()
-//		if opts.Stats != nil {
-//			close(opts.Stats)
-//			opts.Stats = nil
-//		}
-//		mutex.Unlock()
-//	}()
-//
-//	quit := make(chan struct{})
-//	defer close(quit)
-//	go func() {
-//		select {
-//		case <-opts.Done:
-//			mutex.Lock()
-//			if opts.Stats != nil {
-//				close(opts.Stats)
-//				opts.Stats = nil
-//			}
-//			mutex.Unlock()
-//		case <-quit:
-//			return
-//		}
-//
-//	}()
-//
-//	for {
-//		RangeNs(c, func(ns string) error {
-//			nsCtx := namespaces.WithNamespace(context.Background(), ns)
-//			m, err := c.TaskService().Metrics(nsCtx, &tasks.MetricsRequest{
-//				Filters: []string{
-//					"id==" + opts.ID,
-//				},
-//			})
-//			if err != nil {
-//				return errors.New("gRPC error")
-//			}
-//			if m.Metrics == nil {
-//				return errors.New("no metrics received")
-//			}
-//
-//			metric := m.Metrics[0]
-//			var data interface{}
-//			stats := new(Stats)
-//			stats.Read = time.Now()
-//			switch {
-//			case typeurl.Is(metric.Data, (*v1.Metrics)(nil)):
-//				data = &v1.Metrics{}
-//			case typeurl.Is(metric.Data, (*v2.Metrics)(nil)):
-//				data = &v2.Metrics{}
-//			case typeurl.Is(metric.Data, (*wstats.Statistics)(nil)):
-//				data = &wstats.Statistics{}
-//			}
-//			if err := typeurl.UnmarshalTo(metric.Data, data); err != nil {
-//				return err
-//			}
-//			switch v := data.(type) {
-//			case *v1.Metrics:
-//				stats.MemoryStats.Stats.Cache = v.Memory.Cache
-//				stats.MemoryStats.Usage = v.Memory.Usage.Usage
-//				stats.MemoryStats.Limit = v.Memory.Usage.Limit
-//				stats.CPUStats.CPUUsage.TotalUsage = v.CPU.Usage.Total
-//				stats.CPUStats.SystemCPUUsage = v.CPU.Usage.Kernel
-//			case *v2.Metrics:
-//				// no cache field in v2 stats
-//				// according to https://github.com/containerd/nerdctl/blob/main/pkg/statsutil/stats_linux.go, cache might be related with v.Memory.InactiveFile
-//				// an alternative scheme should be like "stats.MemoryStats.Stats.Cache = v.Memory.InactiveFile"
-//				stats.MemoryStats.Stats.Cache = 0
-//				stats.MemoryStats.Usage = v.Memory.Usage
-//				stats.MemoryStats.Limit = v.Memory.UsageLimit
-//				stats.CPUStats.CPUUsage.TotalUsage = v.CPU.UsageUsec
-//				stats.CPUStats.SystemCPUUsage = v.CPU.SystemUsec
-//			case *wstats.Statistics:
-//				v1m := v.GetLinux()
-//				stats.MemoryStats.Stats.Cache = v1m.Memory.Cache
-//				stats.MemoryStats.Usage = v1m.Memory.Usage.Usage
-//				stats.MemoryStats.Limit = v1m.Memory.Usage.Limit
-//				stats.CPUStats.CPUUsage.TotalUsage = v1m.CPU.Usage.Total
-//				stats.CPUStats.SystemCPUUsage = v1m.CPU.Usage.Kernel
-//			}
-//			mutex.Lock()
-//			if opts.Stats != nil {
-//				opts.Stats <- stats
-//			} else {
-//				mutex.Unlock()
-//				return nil
-//			}
-//			mutex.Unlock()
-//		})
-//
-//		time.Sleep(1 * time.Second)
-//	}
-//}
-
 func (c *container) StopGatheringStats() {
 	c.Lock()
 	defer c.Unlock()
-	if c.stopStats != nil {
-		close(c.stopStats)
-		c.stopStats = nil
+	if c.cancelStats != nil {
+		c.cancelStats()
 	}
 }
 
@@ -406,57 +295,41 @@ func (c *container) NetworkInfo(localAddrs []net.IP) report.Sets {
 	return s
 }
 
-func (c *container) memoryUsageMetric(stats []docker.Stats) report.Metric {
-	var max float64
-	samples := make([]report.Sample, len(stats))
-	for i, s := range stats {
-		samples[i].Timestamp = s.Read
-		// This code adapted from
-		// https://github.com/docker/cli/blob/5931fb4276be0afdd6e5ed338d1b2b4b9b5ec8e5/cli/command/container/stats_helpers.go
-		// so that Scope numbers match Docker numbers. Page cache is intentionally excluded.
-		samples[i].Value = float64(s.MemoryStats.Usage - s.MemoryStats.Stats.Cache)
-		if float64(s.MemoryStats.Limit) > max {
-			max = float64(s.MemoryStats.Limit)
-		}
+func (c *container) memoryUsageMetric(stat statsutil.StatsEntry) report.Metric {
+	var (
+		max     float64
+		samples = make([]report.Sample, 1)
+	)
+
+	samples[0].Timestamp = time.Now()
+	samples[0].Value = stat.Memory
+	if stat.MemoryLimit > max {
+		max = stat.MemoryLimit
 	}
+	fmt.Println("mem:  ", stat.MemUsage())
 	return report.MakeMetric(samples).WithMax(max)
 }
 
-func (c *container) cpuPercentMetric(stats []docker.Stats) report.Metric {
-	if len(stats) < 2 {
-		return report.MakeMetric(nil)
-	}
-
-	samples := make([]report.Sample, len(stats)-1)
-	previous := stats[0]
-	for i, s := range stats[1:] {
-		// Copies from docker/api/client/stats.go#L205
-		cpuDelta := float64(s.CPUStats.CPUUsage.TotalUsage - previous.CPUStats.CPUUsage.TotalUsage)
-		systemDelta := float64(s.CPUStats.SystemCPUUsage - previous.CPUStats.SystemCPUUsage)
-		cpuPercent := 0.0
-		if systemDelta > 0.0 && cpuDelta > 0.0 {
-			cpuPercent = (cpuDelta / systemDelta) * 100.0
-		}
-		samples[i].Timestamp = s.Read
-		samples[i].Value = cpuPercent
-		previous = s
-	}
+func (c *container) cpuPercentMetric(stat statsutil.StatsEntry) report.Metric {
+	var (
+		samples = make([]report.Sample, 1)
+	)
+	samples[0].Timestamp = time.Now()
+	samples[0].Value = stat.CPUPercentage
+	fmt.Println("cpu:  ", stat.CPUPerc())
 	return report.MakeMetric(samples).WithMax(100.0)
 }
 
 func (c *container) metrics() report.Metrics {
-	if c.numPending == 0 {
-		return report.Metrics{}
+	var result report.Metrics
+
+	result = report.Metrics{
+		MemoryUsage:   c.memoryUsageMetric(c.latestStats),
+		CPUTotalUsage: c.cpuPercentMetric(c.latestStats),
 	}
-	pendingStats := c.pendingStats[:c.numPending]
-	result := report.Metrics{
-		MemoryUsage:   c.memoryUsageMetric(pendingStats),
-		CPUTotalUsage: c.cpuPercentMetric(pendingStats),
-	}
+	//fmt.Println(c.container.ID, result)
 
 	// leave one stat to help with relative metrics
-	c.pendingStats[0] = c.pendingStats[c.numPending-1]
-	c.numPending = 1
 	return result
 }
 
@@ -572,16 +445,16 @@ func (c *container) GetNode() report.Node {
 		ContainerPrivileged: boolToString[c.container.HostConfig.Privileged],
 		ContainerName:       strings.TrimPrefix(c.container.Name, "/"),
 		ContainerState:      c.StateString(),
-		ContainerStateHuman: c.State(),
+		ContainerStateHuman: c.StateString(),
 	}
 	//	c.container.HostConfig.Privileged
 	if !c.container.State.Paused && c.container.State.Running {
-		uptimeSeconds := int(mtime.Now().Sub(c.container.State.StartedAt) / time.Second)
+		//uptimeSeconds := int(mtime.Now().Sub(c.container.State.StartedAt) / time.Second)
 		networkMode := ""
 		if c.container.HostConfig != nil {
 			networkMode = c.container.HostConfig.NetworkMode
 		}
-		latest[ContainerUptime] = strconv.Itoa(uptimeSeconds)
+		//latest[ContainerUptime] = strconv.Itoa(uptimeSeconds)
 		latest[ContainerRestartCount] = strconv.Itoa(c.container.RestartCount)
 		latest[ContainerNetworkMode] = networkMode
 
@@ -615,11 +488,8 @@ func ContainerIsStopped(c cri.Container[*docker.Container]) bool {
 
 // splitImageName returns parts of the full image name (image name, image tag).
 func splitImageName(imageName string) []string {
-	parts := strings.SplitN(imageName, "/", 3)
-	if len(parts) == 3 {
-		imageName = fmt.Sprintf("%s/%s", parts[1], parts[2])
-	}
-	return strings.SplitN(imageName, ":", 2)
+	lastIdx := strings.LastIndex(imageName, ":")
+	return []string{imageName[:lastIdx], imageName[lastIdx+1:]}
 }
 
 // ImageNameWithoutTag splits the image name apart, returning the name

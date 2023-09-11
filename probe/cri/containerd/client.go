@@ -4,6 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/weaveworks/scope/common/logger"
+
+	"github.com/containerd/containerd/platforms"
+
+	"github.com/containerd/containerd/api/types"
+	"github.com/opencontainers/go-digest"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+
+	"github.com/containerd/containerd/protobuf"
+
+	cimages "github.com/containerd/containerd/images"
+	"github.com/containerd/nerdctl/pkg/imgutil"
+
+	images2 "github.com/containerd/containerd/api/services/images/v1"
+
 	wstats "github.com/Microsoft/hcsshim/cmd/containerd-shim-runhcs-v1/stats"
 	v1 "github.com/containerd/cgroups/stats/v1"
 	v2 "github.com/containerd/cgroups/v3/cgroup2/stats"
@@ -21,8 +40,6 @@ import (
 	"github.com/containerd/typeurl"
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/weaveworks/scope/probe/cri"
-	"sync"
-	"time"
 
 	"log"
 )
@@ -37,6 +54,10 @@ const (
 	CNINetConfPath = "/etc/cni/net.d"
 
 	LabelNamespace = "containerd/namespaces"
+
+	LabelPodNamespace  = "io.kubernetes.pod.namespace"
+	LabelPodName       = "io.kubernetes.pod.name"
+	LabelContainerName = "io.kubernetes.container.name"
 )
 
 var (
@@ -48,10 +69,14 @@ type CriClient struct {
 }
 
 func NewCriClient(endpoint string) *CriClient {
+	if endpoint == "" {
+		endpoint = "/var/run/containerd/containerd.sock"
+	}
 	client, err := containerd.New(endpoint)
 	if err != nil {
 		log.Fatal(err)
 	}
+	CtrStatsLister = NewCtrStats(client)
 	return &CriClient{client: client}
 
 }
@@ -94,7 +119,11 @@ func (c *CriClient) ListContainers(options docker.ListContainersOptions) ([]dock
 			// ID
 			tmpCtr.ID = apiContainer.ID()
 			// Image sha256 digest
-			tmpImg, _ := apiContainer.Image(nsCtx)
+			tmpImg, imgerr := apiContainer.Image(nsCtx)
+			if imgerr != nil {
+				continue
+			}
+
 			tmpCtr.Image = tmpImg.Target().Digest.Hex()
 
 			// spec data
@@ -148,11 +177,16 @@ func (c *CriClient) InspectContainerWithContext(containerID string, ctx context.
 	var (
 		nativeCtr *native.Container
 	)
+	defer func() {
+		if e := recover(); e != nil {
+			log.Println(e)
+		}
+	}()
 	ctr, err := c.client.LoadContainer(ctx, containerID)
-
 	if errdefs.IsNotFound(err) {
 		return nil, ErrContainerNotFound
 	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +194,12 @@ func (c *CriClient) InspectContainerWithContext(containerID string, ctx context.
 	if err != nil {
 		return nil, err
 	}
-	container, err := c.nativeCtrToContainer(ctx, nativeCtr)
+	image, err := ctr.Image(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nativeCtr.Image = image.Target().Digest.Hex()
+	container, err := c.nativeCtrToContainer(nativeCtr)
 	if err != nil {
 		return nil, err
 	}
@@ -178,21 +217,43 @@ func (c *CriClient) InspectContainerWithContext(containerID string, ctx context.
 }
 
 func (c *CriClient) ListImages(options docker.ListImagesOptions) (res []docker.APIImages, err error) {
+	snapshotClient := c.client.SnapshotService("overlayfs")
 	err = c.RangeNs(func(ns string) (bool, error) {
 		nsCtx := namespaces.WithNamespace(context.Background(), ns)
-		images, err := c.client.ListImages(nsCtx)
+		images, err := images2.NewImagesClient(c.client.Conn()).List(nsCtx, &images2.ListImagesRequest{})
 		if err != nil {
 			return false, err
 		}
-		for _, image := range images {
-			size, _ := image.Size(nsCtx)
+		for _, tmpImage := range images.Images {
+			image := cimages.Image{
+				Name:      tmpImage.Name,
+				Labels:    tmpImage.Labels,
+				Target:    descFromProto(tmpImage.Target),
+				CreatedAt: protobuf.FromTimestamp(tmpImage.CreatedAt),
+				UpdatedAt: protobuf.FromTimestamp(tmpImage.UpdatedAt),
+			}
+			if image.Labels == nil {
+				image.Labels = make(map[string]string)
+				image.Labels[LabelNamespace] = ns
+			}
+			ociPlatforms, err := cimages.Platforms(nsCtx, c.client.ContentStore(), image.Target)
+			if err != nil {
+				logger.Logger.Error("get oci platforms failed", "name", image.Name)
+				continue
+			}
+
+			size, err := imgutil.UnpackedImageSize(nsCtx, snapshotClient, containerd.NewImageWithPlatform(c.client, image, platforms.OnlyStrict(ociPlatforms[0])))
+			if err != nil {
+				logger.Logger.Error("get image size failed", "name", image.Name)
+				continue
+			}
 			res = append(res, docker.APIImages{
-				ID:          image.Target().Digest.Hex(),
-				RepoTags:    []string{image.Name()},
-				Created:     image.Metadata().CreatedAt.Unix(),
+				ID:          image.Target.Digest.String(),
+				RepoTags:    []string{image.Name},
+				Created:     time.Now().Local().Unix() - image.CreatedAt.Round(time.Second).Local().Unix(),
 				Size:        size,
 				VirtualSize: size,
-				Labels:      image.Metadata().Labels,
+				Labels:      image.Labels,
 			})
 		}
 		return true, nil
@@ -221,7 +282,11 @@ func (c *CriClient) ListNetworks() ([]docker.Network, error) {
 		if err != nil {
 			return nil, err
 		}
-		var network docker.Network
+		var network = docker.Network{
+			Containers: make(map[string]docker.Endpoint),
+			Options:    make(map[string]string),
+			Labels:     make(map[string]string),
+		}
 		network.Name = compat.Name
 		network.ID = compat.ID
 		for k, v := range compat.Labels {
@@ -240,12 +305,12 @@ func (c *CriClient) ListNetworks() ([]docker.Network, error) {
 }
 
 func (c *CriClient) AddEventListener(events chan<- *docker.APIEvents) error {
-	//TODO implement me
+	//无需实现
 	panic("implement me")
 }
 
 func (c *CriClient) RemoveEventListener(events chan *docker.APIEvents) error {
-	//TODO implement me
+	//无需实现
 	panic("implement me")
 }
 
@@ -279,32 +344,12 @@ func (c *CriClient) RemoveContainer(options docker.RemoveContainerOptions) error
 	panic("implement me")
 }
 
-func (c *CriClient) AttachToContainerNonBlocking(options docker.AttachToContainerOptions) (docker.CloseWaiter, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (c *CriClient) CreateExec(options docker.CreateExecOptions) (*docker.Exec, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (c *CriClient) StartExecNonBlocking(s string, options docker.StartExecOptions) (docker.CloseWaiter, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (c *CriClient) Stats(options docker.StatsOptions) error {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (c *CriClient) ResizeExecTTY(id string, height, width int) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (c *CriClient) nativeCtrToContainer(nsCtx context.Context, nativeContainer *native.Container) (*docker.Container, error) {
+func (c *CriClient) nativeCtrToContainer(nativeContainer *native.Container) (*docker.Container, error) {
 	dockercompatContainer, err := dockercompat.ContainerFromNative(nativeContainer)
 	if err != nil {
 		return nil, err
@@ -313,15 +358,22 @@ func (c *CriClient) nativeCtrToContainer(nsCtx context.Context, nativeContainer 
 	// Container format transformation
 	var container = &docker.Container{}
 	container.ID = dockercompatContainer.ID
-	container.Created, err = time.Parse(time.RFC3339Nano, dockercompatContainer.Created)
-	if err != nil {
-		return nil, err
+	if dockercompatContainer.Created != "" {
+		container.Created, err = time.Parse("2006-01-02T15:04:05.999999999Z", dockercompatContainer.Created)
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	container.Path = dockercompatContainer.Path
 	container.Args = dockercompatContainer.Args
 
 	// Configurations
-	container.Config = &docker.Config{}
+	container.Config = &docker.Config{
+		ExposedPorts: make(map[docker.Port]struct{}),
+		Volumes:      make(map[string]struct{}),
+		Labels:       make(map[string]string),
+	}
 	container.Config.Hostname = dockercompatContainer.Config.Hostname
 	container.Config.Labels = dockercompatContainer.Config.Labels
 	// container.Config.AttachStdin = dockercompatContainer.Config.AttachStdin
@@ -337,7 +389,11 @@ func (c *CriClient) nativeCtrToContainer(nsCtx context.Context, nativeContainer 
 	// States
 	container.State.Error = dockercompatContainer.State.Error
 	container.State.ExitCode = dockercompatContainer.State.ExitCode
-	container.State.FinishedAt, err = time.Parse(time.RFC3339Nano, dockercompatContainer.State.FinishedAt)
+	if dockercompatContainer.State.FinishedAt != "" {
+		container.State.FinishedAt, err = time.Parse(time.RFC3339Nano, dockercompatContainer.State.FinishedAt)
+
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -348,38 +404,48 @@ func (c *CriClient) nativeCtrToContainer(nsCtx context.Context, nativeContainer 
 	container.State.Status = dockercompatContainer.State.Status
 
 	// Container format transformation
-	img, err := c.client.ImageService().Get(nsCtx, dockercompatContainer.Image)
-	if err != nil {
-		return nil, err
-	}
-	container.Image = img.Target.Digest.String()
+	container.Image = nativeContainer.Image
 	// container.Node = dockercompatContainer.Node
 
 	// NetworkSettings
-	container.NetworkSettings = new(docker.NetworkSettings)
-	// manually copy ports
-	for k, v := range *dockercompatContainer.NetworkSettings.Ports {
-		p := docker.Port(k)
-		var pb []docker.PortBinding
-		for _, v2 := range v {
-			pb = append(pb, docker.PortBinding(v2))
-		}
-		container.NetworkSettings.Ports[p] = pb
+	container.NetworkSettings = &docker.NetworkSettings{
+		Ports:       make(map[docker.Port][]docker.PortBinding),
+		PortMapping: make(map[string]docker.PortMapping),
+		Networks:    make(map[string]docker.ContainerNetwork),
 	}
-	container.NetworkSettings.GlobalIPv6Address = dockercompatContainer.NetworkSettings.GlobalIPv6Address
-	container.NetworkSettings.GlobalIPv6PrefixLen = dockercompatContainer.NetworkSettings.GlobalIPv6PrefixLen
-	container.NetworkSettings.IPAddress = dockercompatContainer.NetworkSettings.IPAddress
-	container.NetworkSettings.IPPrefixLen = dockercompatContainer.NetworkSettings.IPPrefixLen
-	container.NetworkSettings.MacAddress = dockercompatContainer.NetworkSettings.MacAddress
-	// manually copy networks
-	for k, v := range dockercompatContainer.NetworkSettings.Networks {
-		var cn docker.ContainerNetwork
-		cn.GlobalIPv6Address = v.GlobalIPv6Address
-		cn.GlobalIPv6PrefixLen = v.GlobalIPv6PrefixLen
-		cn.IPAddress = v.IPAddress
-		cn.IPPrefixLen = v.IPPrefixLen
-		cn.MacAddress = v.MacAddress
-		container.NetworkSettings.Networks[k] = cn
+	defer func() {
+		if e := recover(); e != nil {
+			fmt.Println(e)
+		}
+	}()
+	// manually copy ports
+	if dockercompatContainer.NetworkSettings != nil {
+		if dockercompatContainer.NetworkSettings.Ports != nil {
+			for k, v := range *dockercompatContainer.NetworkSettings.Ports {
+				p := docker.Port(k)
+				var pb []docker.PortBinding
+				for _, v2 := range v {
+					pb = append(pb, docker.PortBinding(v2))
+				}
+				container.NetworkSettings.Ports[p] = pb
+			}
+		}
+
+		container.NetworkSettings.GlobalIPv6Address = dockercompatContainer.NetworkSettings.GlobalIPv6Address
+		container.NetworkSettings.GlobalIPv6PrefixLen = dockercompatContainer.NetworkSettings.GlobalIPv6PrefixLen
+		container.NetworkSettings.IPAddress = dockercompatContainer.NetworkSettings.IPAddress
+		container.NetworkSettings.IPPrefixLen = dockercompatContainer.NetworkSettings.IPPrefixLen
+		container.NetworkSettings.MacAddress = dockercompatContainer.NetworkSettings.MacAddress
+		// manually copy networks
+		for k, v := range dockercompatContainer.NetworkSettings.Networks {
+			var cn docker.ContainerNetwork
+			cn.GlobalIPv6Address = v.GlobalIPv6Address
+			cn.GlobalIPv6PrefixLen = v.GlobalIPv6PrefixLen
+			cn.IPAddress = v.IPAddress
+			cn.IPPrefixLen = v.IPPrefixLen
+			cn.MacAddress = v.MacAddress
+			container.NetworkSettings.Networks[k] = cn
+		}
 	}
 
 	// Container format transformation
@@ -387,6 +453,9 @@ func (c *CriClient) nativeCtrToContainer(nsCtx context.Context, nativeContainer 
 	container.HostnamePath = dockercompatContainer.HostnamePath
 	container.LogPath = dockercompatContainer.LogPath
 	container.Name = dockercompatContainer.Name
+	if container.Name == "" {
+		container.Name = getContainerName(nativeContainer.Labels)
+	}
 	container.Driver = dockercompatContainer.Driver
 	// manually copy mounts
 	for _, v := range dockercompatContainer.Mounts {
@@ -517,4 +586,31 @@ func getNsFromAPIContainer(container docker.APIContainers) string {
 }
 func getNsFromContainer(container docker.Container) string {
 	return container.Config.Labels[LabelNamespace]
+}
+
+func getContainerName(containerLabels map[string]string) string {
+	if name, ok := containerLabels[labels.Name]; ok {
+		return name
+	}
+
+	if ns, ok := containerLabels[LabelPodNamespace]; ok {
+		if podName, ok := containerLabels[LabelPodName]; ok {
+			if containerName, ok := containerLabels[LabelContainerName]; ok {
+				// Container
+				return fmt.Sprintf("k8s://%s/%s/%s", ns, podName, containerName)
+			}
+			// Pod sandbox
+			return fmt.Sprintf("k8s://%s/%s", ns, podName)
+		}
+	}
+	return ""
+}
+
+func descFromProto(desc *types.Descriptor) ocispec.Descriptor {
+	return ocispec.Descriptor{
+		MediaType:   desc.MediaType,
+		Size:        desc.Size,
+		Digest:      digest.Digest(desc.Digest),
+		Annotations: desc.Annotations,
+	}
 }

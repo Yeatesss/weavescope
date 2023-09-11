@@ -2,14 +2,19 @@ package containerd
 
 import (
 	"context"
-	"fmt"
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/events"
-	"github.com/containerd/containerd/namespaces"
-	docker_client "github.com/fsouza/go-dockerclient"
-	"github.com/weaveworks/scope/probe/cri"
+	"errors"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/containerd/containerd"
+	_ "github.com/containerd/containerd/api/events"
+	apiEvent "github.com/containerd/containerd/api/events"
+	"github.com/containerd/containerd/events"
+	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/typeurl/v2"
+	docker_client "github.com/fsouza/go-dockerclient"
+	"github.com/weaveworks/scope/probe/cri"
 
 	common_controls "github.com/weaveworks/scope/common/controls"
 
@@ -18,19 +23,6 @@ import (
 
 	"github.com/weaveworks/scope/probe/controls"
 	"github.com/weaveworks/scope/report"
-)
-
-// Consts exported for testing.
-const (
-	CreateEvent            = "create"
-	DestroyEvent           = "destroy"
-	RenameEvent            = "rename"
-	StartEvent             = "start"
-	DieEvent               = "die"
-	PauseEvent             = "pause"
-	UnpauseEvent           = "unpause"
-	NetworkConnectEvent    = "network:connect"
-	NetworkDisconnectEvent = "network:disconnect"
 )
 
 // NewContainerStub Vars exported for testing.
@@ -97,7 +89,6 @@ func NewRegistry(options RegistryOptions) (cri.Registry[*docker_client.Container
 		noEnvironmentVariables: options.NoEnvironmentVariables,
 		controlChannel:         options.ControlActions,
 	}
-
 	r.registerControls()
 	go r.loop()
 	return r, nil
@@ -180,8 +171,7 @@ func (r *registry) listenForEvents() bool {
 				log.Errorf("containerd registry: event listener unexpectedly disconnected")
 				return true
 			}
-			fmt.Println(event)
-			//r.handleEvent(event)
+			r.handleEvent(event)
 
 		case <-otherUpdates:
 			if err := r.updateImages(); err != nil {
@@ -286,7 +276,7 @@ func (r *registry) updateContainers() error {
 	if err != nil {
 		return err
 	}
-
+	//fmt.Println(len(apiContainers))
 	for _, apiContainer := range apiContainers {
 		ns := getNsFromAPIContainer(apiContainer)
 		nsCtx := namespaces.WithNamespace(context.Background(), ns)
@@ -305,6 +295,9 @@ func (r *registry) updateImages() error {
 	defer r.Unlock()
 	r.images = make(map[string]docker_client.APIImages)
 	for _, image := range images {
+		if strings.Contains(image.RepoTags[0], "@sha256:") || strings.HasPrefix(image.RepoTags[0], "sha256:") {
+			continue
+		}
 		r.images[image.ID] = image
 	}
 	return nil
@@ -323,71 +316,112 @@ func (r *registry) updateNetworks() error {
 	return nil
 }
 
-func (r *registry) handleEvent(event *docker_client.APIEvents) {
-	// TODO: Send shortcut reports on networks being created/destroyed?
-	switch event.Status {
-	case CreateEvent, RenameEvent, StartEvent, DieEvent, PauseEvent, UnpauseEvent, NetworkConnectEvent, NetworkDisconnectEvent:
-		//r.updateContainerState(event.ID)
-	case DestroyEvent:
+var updateContainerState = func(r *registry, containerID string) error {
+	nsCtx, err := r.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+	r.updateContainerState(nsCtx, containerID)
+	return nil
+}
+
+func (r *registry) handleEvent(eventAc *events.Envelope) {
+	evt, err := typeurl.UnmarshalAny(eventAc.Event)
+	if err != nil {
+		log.Errorf("Unable to unmarshal event: %v", err)
+	}
+	//event.Time = env.Timestamp.Unix()
+	switch v := evt.(type) {
+	case *apiEvent.ContainerCreate:
+		updateContainerState(r, v.ID)
+	case *apiEvent.ContainerUpdate:
+		updateContainerState(r, v.ID)
+	case *apiEvent.TaskPaused:
+		updateContainerState(r, v.ContainerID)
+	case *apiEvent.TaskResumed:
+		updateContainerState(r, v.ContainerID)
+	case *apiEvent.ContainerDelete:
 		r.Lock()
-		r.deleteContainer(event.ID)
+		r.deleteContainer(v.ID)
 		r.Unlock()
-		r.sendDeletedUpdate(event.ID)
+
+	case *apiEvent.NamespaceCreate:
+		CtrStatsLister.nsChan <- &NsChan{
+			Namespace: v.Name,
+			Stats:     nil,
+		}
+	case *apiEvent.NamespaceDelete:
+		CtrStatsLister.nsChan <- &NsChan{
+			Namespace: v.Name,
+			Remove:    true,
+		}
+		//	r.sendDeletedUpdate(event.ID)
 	}
 }
 
+//func (r *registry) handleEvent(event *docker_client.APIEvents) {
+//	// TODO: Send shortcut reports on networks being created/destroyed?
+//	switch event.Status {
+//	case CreateEvent, RenameEvent, StartEvent, DieEvent, PauseEvent, UnpauseEvent, NetworkConnectEvent, NetworkDisconnectEvent:
+//		r.updateContainerState(event.ID)
+//	case DestroyEvent:
+//		r.Lock()
+//		r.deleteContainer(event.ID)
+//		r.Unlock()
+//		r.sendDeletedUpdate(event.ID)
+//	}
+//}
+
 func (r *registry) updateContainerState(nsCtx context.Context, containerID string) {
-	return
-	//r.Lock()
-	//defer r.Unlock()
-	//
-	//ctr, err := r.client.LoadContainer(nsCtx, containerID)
-	//if err != nil {
-	//	if errdefs.IsNotFound(err) {
-	//		r.deleteContainer(containerID)
-	//
-	//		return
-	//	}
-	//	log.Errorf("Unable to get status for container %s: %v", containerID, err)
-	//
-	//	return
-	//}
-	//dockerCtr := NewDockerContainer(nsCtx, ctr)
-	//// Container exists, ensure we have it
-	//o, ok := r.containers.Get(containerID)
-	//var c Container
-	//if !ok {
-	//	c = NewContainerStub(dockerCtr, r.hostID, r.noCommandLineArguments, r.noEnvironmentVariables)
-	//	r.containers.Insert(containerID, c)
-	//} else {
-	//	c = o.(Container)
-	//	// potentially remove existing pid mapping.
-	//	delete(r.containersByPID, c.PID())
-	//	c.UpdateState(dockerCtr)
-	//}
-	//
-	//// Update PID index
-	//if c.PID() > 1 {
-	//	r.containersByPID[c.PID()] = c
-	//}
-	//
-	//// Trigger anyone watching for updates
-	//node := c.GetNode()
-	//for _, f := range r.watchers {
-	//	f(node)
-	//}
-	//
-	//// And finally, ensure we gather stats for it
-	//if r.collectStats {
-	//	if dockerCtr.State.Running {
-	//		if err := c.StartGatheringStats(r.client); err != nil {
-	//			log.Errorf("Error gathering stats for container %s: %s", containerID, err)
-	//			return
-	//		}
-	//	} else {
-	//		c.StopGatheringStats()
-	//	}
-	//}
+	r.Lock()
+	defer r.Unlock()
+
+	dockerContainer, err := r.client.InspectContainerWithContext(containerID, nsCtx)
+	if err != nil {
+		if errors.Is(err, ErrContainerNotFound) {
+			log.Errorf("Unable to get status for container %s: %v", containerID, err)
+			return
+		}
+		// Docker says the container doesn't exist - remove it from our data
+		r.deleteContainer(containerID)
+		return
+	}
+	dockerContainer.Config.Hostname = r.hostID
+	// Container exists, ensure we have it
+	o, ok := r.containers.Get(containerID)
+	var c cri.Container[*docker_client.Container]
+	if !ok {
+		c = NewContainerStub(dockerContainer, r.hostID, r.noCommandLineArguments, r.noEnvironmentVariables)
+		r.containers.Insert(containerID, c)
+	} else {
+		c = o.(cri.Container[*docker_client.Container])
+		// potentially remove existing pid mapping.
+		delete(r.containersByPID, c.PID())
+		c.UpdateState(dockerContainer)
+	}
+
+	// Update PID index
+	if c.PID() > 1 {
+		r.containersByPID[c.PID()] = c
+	}
+
+	// Trigger anyone watching for updates
+	node := c.GetNode()
+	for _, f := range r.watchers {
+		f(node)
+	}
+
+	// And finally, ensure we gather stats for it
+	if r.collectStats {
+		if dockerContainer.State.Running {
+			if err := c.StartGatheringStats(r.client); err != nil {
+				log.Errorf("Error gathering stats for container %s: %s", containerID, err)
+				return
+			}
+		} else {
+			c.StopGatheringStats()
+		}
+	}
 }
 
 func (r *registry) deleteContainer(containerID string) {
@@ -430,7 +464,7 @@ func (r *registry) WalkContainers(f func(cri.Container[*docker_client.Container]
 func (r *registry) GetContainerImage(id string) (docker_client.APIImages, bool) {
 	r.RLock()
 	defer r.RUnlock()
-	image, ok := r.images[id]
+	image, ok := r.images[PauseSha256(id)]
 	return image, ok
 }
 
@@ -452,14 +486,18 @@ func (r *registry) WalkImages(f func(docker_client.APIImages)) {
 
 	r.usedImages = make(map[string]docker_client.APIImages)
 	// Loop over containers so we only emit images for running containers.
-	r.containers.Walk(func(_ string, c interface{}) bool {
-		image, ok := r.images[c.(cri.Container[*docker_client.Container]).Image()]
+	r.containers.Walk(func(ctrID string, c interface{}) bool {
+		image, ok := r.images[PauseSha256(c.(cri.Container[*docker_client.Container]).Image())]
+
 		if ok {
-			r.usedImages[c.(cri.Container[*docker_client.Container]).Image()] = image
-			f(image)
+			if _, exists := r.usedImages[PauseSha256(c.(cri.Container[*docker_client.Container]).Image())]; !exists {
+				r.usedImages[PauseSha256(c.(cri.Container[*docker_client.Container]).Image())] = image
+				f(image)
+			}
 		}
 		return false
 	})
+	//fmt.Println(r.usedImages)
 
 }
 
@@ -469,7 +507,7 @@ func (r *registry) WalkUnusedImages(f func(docker_client.APIImages)) {
 	defer r.RUnlock()
 	// Loop over containers so we only emit images for running containers.
 	for image, val := range r.images {
-		_, ok := r.usedImages[image]
+		_, ok := r.usedImages[PauseSha256(image)]
 		if !ok {
 			f(val)
 		}
@@ -484,4 +522,11 @@ func (r *registry) WalkNetworks(f func(docker_client.Network)) {
 	for _, network := range r.networks {
 		f(network)
 	}
+}
+
+func PauseSha256(h string) string {
+	if !strings.Contains(h, "sha256:") {
+		return "sha256:" + h
+	}
+	return h
 }

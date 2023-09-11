@@ -4,11 +4,6 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
-	log2 "github.com/Yeatesss/container-software/pkg/log"
-	log3 "github.com/charmbracelet/log"
-	"github.com/weaveworks/common/user"
-	"github.com/weaveworks/scope/common/performance_analyzer"
-	"github.com/weaveworks/scope/common/target"
 	"io/ioutil"
 	"net"
 	"os"
@@ -17,6 +12,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	log2 "github.com/Yeatesss/container-software/pkg/log"
+	log3 "github.com/charmbracelet/log"
+	"github.com/weaveworks/common/user"
+	"github.com/weaveworks/scope/common/performance_analyzer"
+	"github.com/weaveworks/scope/common/target"
 
 	log "github.com/sirupsen/logrus"
 
@@ -342,7 +343,6 @@ func setupFlags(flags *flags) {
 	// Containerd
 	flag.BoolVar(&flags.probe.containerdEnabled, "probe.containerd", false, "collect Containerd-related attributes for processes")
 	flag.DurationVar(&flags.probe.containerdInterval, "probe.containerd.interval", 10*time.Second, "how often to update Containerd attributes")
-	flag.StringVar(&flags.probe.containerdBridge, "probe.containerd.bridge", "containerd0", "the containerd bridge name")
 
 	// CRI
 	flag.BoolVar(&flags.probe.criEnabled, "probe.cri", false, "collect CRI-related attributes for processes")

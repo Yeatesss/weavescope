@@ -3,14 +3,15 @@ package docker
 import (
 	"context"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
-	"github.com/weaveworks/scope/probe/cri"
 	"io"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
+	"github.com/weaveworks/scope/probe/cri"
 
 	docker "github.com/fsouza/go-dockerclient"
 	log "github.com/sirupsen/logrus"
@@ -527,6 +528,7 @@ func ImageNameWithoutTag(imageName string) string {
 // ImageNameTag splits the image name apart, returning the version tag, if possible
 func ImageNameTag(imageName string) string {
 	imageNameParts := splitImageName(imageName)
+
 	if len(imageNameParts) < 2 {
 		return ""
 	}

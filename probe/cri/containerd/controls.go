@@ -2,13 +2,14 @@ package containerd
 
 import (
 	"context"
+	"net/http"
+	"syscall"
+
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
 	log "github.com/sirupsen/logrus"
 	"github.com/weaveworks/scope/report"
-	"net/http"
-	"syscall"
 )
 
 // Control IDs used by the docker integration.
@@ -51,7 +52,7 @@ func (r *registry) registerControls() {
 func (r *registry) findContainer(containerID string) (nsCtx context.Context, err error) {
 	err = r.client.(*CriClient).RangeNs(func(ns string) (bool, error) {
 		nsCtx = namespaces.WithNamespace(context.Background(), ns)
-		_, err = r.client.InspectContainerWithContext(containerID, nsCtx)
+		_, err = r.client.(*CriClient).client.LoadContainer(nsCtx, containerID)
 		if err != nil && errdefs.IsNotFound(err) {
 			return true, nil
 		}

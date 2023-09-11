@@ -1,4 +1,4 @@
-package docker
+package containerd
 
 import (
 	"bytes"
@@ -10,13 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coocood/freecache"
+	jsoniter "github.com/json-iterator/go"
+
 	"github.com/Yeatesss/container-software/core"
 	"github.com/Yeatesss/container-software/pkg/command"
 	yprocess "github.com/Yeatesss/container-software/pkg/proc/process"
-	"github.com/coocood/freecache"
 	"github.com/dolthub/swiss"
 	docker_client "github.com/fsouza/go-dockerclient"
-	jsoniter "github.com/json-iterator/go"
 	log "github.com/sirupsen/logrus"
 	"github.com/weaveworks/common/mtime"
 	"github.com/weaveworks/scope/probe/cri"
@@ -26,11 +27,12 @@ import (
 
 // Node metadata keys.
 const (
-	ContainerID = report.DockerContainerID
-	Name        = report.Name
+	ContainerTypeDockerLabel     = "io.kubernetes.docker.type"
+	ContainerTypeContainerdLabel = "io.cri-containerd.kind"
+	ContainerTypeCrioAnnotation  = "io.kubernetes.cri-o.ContainerType"
 )
 
-// These vars are exported for testing.
+// NewProcessTreeStub These vars are exported for testing.
 var (
 	NewProcessTreeStub = process.NewTree
 )
@@ -173,7 +175,8 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			SetSuspectMap(containerID, imageName)
 			node = node.WithParent(report.ContainerImage, report.MakeContainerImageNodeID(imageName))
 		}
-		if c.Container().Config.Labels["io.kubernetes.docker.type"] != "podsandbox" {
+		if c.Container().Config.Labels[ContainerTypeContainerdLabel] != "sandbox" ||
+			c.Container().Config.Labels[ContainerTypeDockerLabel] != "podsandbox" {
 			for _, env := range c.Container().Config.Env {
 				if strings.Contains(env, "PATH=") {
 					SoftFinder.EnvPath.Set([]byte(containerID), []byte(env), 0)
@@ -293,6 +296,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		containerTopology.Nodes[report.MakeContainerNodeID(containerID)] = node
 		return
 	}
+	//timeso("开始遍历容器进程")
 
 	var wg sync.WaitGroup
 	ctrProcess.Iter(func(id string, ps core.Processes) (stop bool) {

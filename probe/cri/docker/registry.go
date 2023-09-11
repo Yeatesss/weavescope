@@ -2,10 +2,11 @@ package docker
 
 import (
 	"context"
-	common_controls "github.com/weaveworks/scope/common/controls"
-	"github.com/weaveworks/scope/probe/cri"
 	"sync"
 	"time"
+
+	common_controls "github.com/weaveworks/scope/common/controls"
+	"github.com/weaveworks/scope/probe/cri"
 
 	"github.com/armon/go-radix"
 	docker_client "github.com/fsouza/go-dockerclient"
@@ -293,7 +294,6 @@ func (r *registry) handleEvent(event *docker_client.APIEvents) {
 func (r *registry) updateContainerState(containerID string) {
 	r.Lock()
 	defer r.Unlock()
-
 	dockerContainer, err := r.client.InspectContainerWithContext(containerID, context.Background())
 	if err != nil {
 		if _, ok := err.(*docker_client.NoSuchContainer); !ok {

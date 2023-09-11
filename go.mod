@@ -67,6 +67,7 @@ require (
 	github.com/containerd/containerd v1.7.3
 	github.com/containerd/nerdctl v1.5.0
 	github.com/containerd/typeurl v1.0.3-0.20220422153119-7f6e6d160d67
+	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/klauspost/compress v1.16.7
 	github.com/pyroscope-io/client v0.7.1
 	golang.org/x/sync v0.3.0
@@ -91,7 +92,6 @@ require (
 	github.com/containerd/imgcrypt v1.1.7 // indirect
 	github.com/containerd/stargz-snapshotter v0.14.3 // indirect
 	github.com/containerd/ttrpc v1.2.2 // indirect
-	github.com/containerd/typeurl/v2 v2.1.1 // indirect
 	github.com/containernetworking/cni v1.1.2 // indirect
 	github.com/containernetworking/plugins v1.3.0 // indirect
 	github.com/containers/ocicrypt v1.1.7 // indirect
@@ -202,6 +202,6 @@ require (
 // Do not upgrade until https://github.com/fluent/fluent-logger-golang/issues/80 is fixed
 replace github.com/fluent/fluent-logger-golang => github.com/fluent/fluent-logger-golang v1.2.1
 
-//replace github.com/Yeatesss/container-software v0.0.0-20230825021639-6ddb682d79c2 => ../container-software
+replace github.com/Yeatesss/container-software v0.0.0-20230825021639-6ddb682d79c2 => ../container-software
 
 replace github.com/fsouza/go-dockerclient v1.3.0 => ../go-dockerclient

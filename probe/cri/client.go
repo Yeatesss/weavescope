@@ -14,16 +14,11 @@ type Client interface {
 	ListNetworks() ([]docker_client.Network, error)
 	AddEventListener(chan<- *docker_client.APIEvents) error
 	RemoveEventListener(chan *docker_client.APIEvents) error
-
 	StopContainer(string, uint) error
 	StartContainer(string, *docker_client.HostConfig) error
 	RestartContainer(string, uint) error
 	PauseContainer(string) error
 	UnpauseContainer(string) error
 	RemoveContainer(docker_client.RemoveContainerOptions) error
-	AttachToContainerNonBlocking(docker_client.AttachToContainerOptions) (docker_client.CloseWaiter, error)
-	CreateExec(docker_client.CreateExecOptions) (*docker_client.Exec, error)
-	StartExecNonBlocking(string, docker_client.StartExecOptions) (docker_client.CloseWaiter, error)
 	Stats(docker_client.StatsOptions) error
-	ResizeExecTTY(id string, height, width int) error
 }

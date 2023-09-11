@@ -34,6 +34,18 @@ func Remove(rpt *report.Report, rms []string) {
 		switch r {
 		case "endpoint":
 			rpt.Endpoint.Nodes = make(report.Nodes)
+		case "process":
+			rpt.Process.Nodes = make(report.Nodes)
+		case "image":
+			rpt.UnusedImage.Nodes = make(report.Nodes)
+			rpt.ContainerImage.Nodes = make(report.Nodes)
+		case "container":
+			rpt.Container.Nodes = make(report.Nodes)
+		case "pod":
+			rpt.Pod.Nodes = make(report.Nodes)
+		case "deployment":
+			rpt.Deployment.Nodes = make(report.Nodes)
+
 		}
 	}
 }

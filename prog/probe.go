@@ -4,12 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/gorilla/mux"
-	uuid2 "github.com/pborman/uuid"
-	"github.com/tylerb/graceful"
-	common_controls "github.com/weaveworks/scope/common/controls"
-	"github.com/weaveworks/scope/probe/cri/docker"
-	"github.com/weaveworks/scope/tools/vars"
 	"math/rand"
 	"net"
 	"net/http"
@@ -18,6 +12,14 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/gorilla/mux"
+	uuid2 "github.com/pborman/uuid"
+	"github.com/tylerb/graceful"
+	common_controls "github.com/weaveworks/scope/common/controls"
+	"github.com/weaveworks/scope/probe/cri/containerd"
+	"github.com/weaveworks/scope/probe/cri/docker"
+	"github.com/weaveworks/scope/tools/vars"
 
 	log "github.com/sirupsen/logrus"
 
@@ -315,36 +317,29 @@ func probeMain(flags probeFlags, targets []appclient.Target) {
 		p.AddReporter(endpointReporter)
 	}
 	// containerd
-	//if flags.containerdEnabled {
-	//	// Don't add the bridge in Kubernetes since container IPs are global and
-	//	// shouldn't be scoped
-	//	if flags.containerdBridge != "" && !flags.kubernetesEnabled {
-	//		if err := report.AddLocalBridge(flags.containerdBridge); err != nil {
-	//			log.Errorf("Containerd: problem with bridge %s: %v", flags.containerdBridge, err)
-	//		}
-	//	}
-	//	containerdControlActions := make(chan *common_controls.ControlAction, 10)
-	//	controlMap["containerd"] = containerdControlActions
-	//	options := containerd.RegistryOptions{
-	//		Interval:               flags.containerdInterval,
-	//		Pipes:                  clients,
-	//		CollectStats:           true,
-	//		HostID:                 hostID,
-	//		HandlerRegistry:        handlerRegistry,
-	//		NoCommandLineArguments: flags.noCommandLineArguments,
-	//		NoEnvironmentVariables: flags.noEnvironmentVariables,
-	//		ControlActions:         containerdControlActions,
-	//	}
-	//	if registry, err := containerd.NewRegistry(options); err == nil {
-	//		defer registry.Stop()
-	//		if flags.procEnabled {
-	//			p.AddTagger(pcontainerd.NewTagger(registry, processCache))
-	//		}
-	//		p.AddReporter(pcontainerd.NewReporter(registry, hostID, probeID, p))
-	//	} else {
-	//		log.Errorf("Docker: failed to start registry: %v", err)
-	//	}
-	//}
+	if flags.containerdEnabled {
+		containerdControlActions := make(chan *common_controls.ControlAction, 10)
+		controlMap["containerd"] = containerdControlActions
+		options := containerd.RegistryOptions{
+			Interval:               flags.containerdInterval,
+			Pipes:                  clients,
+			CollectStats:           true,
+			HostID:                 hostID,
+			HandlerRegistry:        handlerRegistry,
+			NoCommandLineArguments: flags.noCommandLineArguments,
+			NoEnvironmentVariables: flags.noEnvironmentVariables,
+			ControlActions:         containerdControlActions,
+		}
+		if registry, err := containerd.NewRegistry(options); err == nil {
+			defer registry.Stop()
+			if flags.procEnabled {
+				p.AddTagger(containerd.NewTagger(registry, processCache))
+			}
+			p.AddReporter(containerd.NewReporter(registry, hostID, probeID, p))
+		} else {
+			log.Errorf("Docker: failed to start registry: %v", err)
+		}
+	}
 
 	if flags.dockerEnabled {
 		// Don't add the bridge in Kubernetes since container IPs are global and
