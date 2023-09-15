@@ -2,11 +2,14 @@ package host
 
 import (
 	"fmt"
+	"github.com/Yeatesss/container-software/pkg/command"
 	docker_client "github.com/fsouza/go-dockerclient"
+	"log"
 	"net"
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,25 +20,44 @@ import (
 
 // Keys for use in Node.Latest.
 const (
-	DockerVersion    = report.DockerVersion
-	DockerApiVersion = report.DockerApiVersion
-	DockerGoVersion  = report.DockerGoVersion
-	DockerDriver     = report.DockerDriver
-	DockerRootDir    = report.DockerRootDir
-	HostMasterIP     = report.HostMasterIP
-	Timestamp        = report.Timestamp
-	HostName         = report.HostName
-	LocalNetworks    = report.HostLocalNetworks
-	OS               = report.OS
-	KernelVersion    = report.KernelVersion
-	Uptime           = report.Uptime
-	Load1            = report.Load1
-	CPUUsage         = report.HostCPUUsage
-	MemoryUsage      = report.HostMemoryUsage
-	ScopeVersion     = report.ScopeVersion
+	ContainerRuntimeVersion = report.ContainerRuntimeVersion
+
+	HostMasterIP  = report.HostMasterIP
+	Timestamp     = report.Timestamp
+	HostName      = report.HostName
+	LocalNetworks = report.HostLocalNetworks
+	OS            = report.OS
+	OsRelease     = report.OsRelease
+	KernelVersion = report.KernelVersion
+	Uptime        = report.Uptime
+	Load1         = report.Load1
+	CPUUsage      = report.HostCPUUsage
+	MemoryUsage   = report.HostMemoryUsage
+	ScopeVersion  = report.ScopeVersion
 )
 
 var CollectorAddress string
+
+var osRelease string
+
+func GetOsRelease() {
+	osReleaseData, err := os.ReadFile("/etc/host/os-release")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for len(osReleaseData) > 0 {
+		line := command.ReadLine(osReleaseData)
+		exline := strings.Split(string(line), "=")
+		if len(exline) == 2 {
+			switch exline[0] {
+			case "ID":
+				osRelease = exline[1]
+			}
+		}
+		osReleaseData = command.NextLine(osReleaseData)
+	}
+	return
+}
 
 // Exposed for testing.
 const (
@@ -110,6 +132,7 @@ func NewReporter(hostID, hostName, probeID, version string, pipes controls.PipeC
 		pipeIDToTTY:     map[string]uintptr{},
 		dockerClient:    client,
 	}
+	GetOsRelease() //获取操作系统类型
 	return r
 }
 
@@ -122,14 +145,9 @@ var GetLocalNetworks = report.GetLocalNetworks
 // Report implements Reporter.
 func (r *Reporter) Report() (report.Report, error) {
 	var (
-		rep           = report.MakeReport()
-		ip            string
-		localCIDRs    []string
-		dockerVersion string
-		dockerDrive   string
-		dockerRootDir string
-		apiVersion    string
-		goVersion     string
+		rep        = report.MakeReport()
+		ip         string
+		localCIDRs []string
 	)
 
 	localNets, err := GetLocalNetworks()
@@ -160,20 +178,6 @@ func (r *Reporter) Report() (report.Report, error) {
 	metrics[CPUUsage] = report.MakeSingletonMetric(now, cpuUsage).WithMax(max)
 	memoryUsage, max := GetMemoryUsageBytes()
 	metrics[MemoryUsage] = report.MakeSingletonMetric(now, memoryUsage).WithMax(max)
-	if r.dockerClient != nil {
-		env, e := r.dockerClient.Version()
-		if e == nil && env != nil && env.Exists("Version") {
-			dockerVersion = env.Get("Version")
-			apiVersion = env.Get("ApiVersion")
-			goVersion = env.Get("GoVersion")
-		}
-		info, e := r.dockerClient.Info()
-		if e == nil {
-			dockerDrive = info.Driver
-			dockerRootDir = info.DockerRootDir
-		}
-
-	}
 	uuid, _ := os.ReadFile("/etc/cluster/uuid")
 	if hostIP := os.Getenv("HOST_IP"); hostIP != "" {
 		ip = hostIP
@@ -186,16 +190,12 @@ func (r *Reporter) Report() (report.Report, error) {
 
 	rep.Host.AddNode(
 		report.MakeNodeWith(report.MakeHostNodeID(r.hostID), map[string]string{
-			DockerVersion:         dockerVersion,
-			DockerApiVersion:      apiVersion,
 			HostMasterIP:          ip,
-			DockerDriver:          dockerDrive,
-			DockerRootDir:         dockerRootDir,
-			DockerGoVersion:       goVersion,
 			report.ControlProbeID: r.probeID,
 			Timestamp:             mtime.Now().UTC().Format(time.RFC3339Nano),
 			HostName:              r.hostName,
 			OS:                    runtime.GOOS,
+			OsRelease:             osRelease,
 			KernelVersion:         kernel,
 			Uptime:                strconv.Itoa(int(uptime / time.Second)), // uptime in seconds
 			ScopeVersion:          r.version,

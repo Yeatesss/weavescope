@@ -15,9 +15,10 @@ type NodeReplenish struct {
 	data  *swiss.Map[string, *Nodes]
 }
 type Node struct {
-	isDelete *bool
-	name     string
-	NodeRole string
+	isDelete       *bool
+	name           string
+	NodeRole       string
+	RuntimeVersion string
 }
 type Nodes struct {
 	sync.RWMutex

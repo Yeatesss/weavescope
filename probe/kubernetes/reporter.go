@@ -13,6 +13,8 @@ import (
 
 // These constants are keys used in node metadata
 const (
+	ContainerRuntimeVersion = report.ContainerRuntimeVersion
+
 	IP                 = report.KubernetesIP
 	ObservedGeneration = report.KubernetesObservedGeneration
 	Replicas           = report.KubernetesReplicas
@@ -699,7 +701,8 @@ func (r *Reporter) hostTopology() (report.Topology, error) {
 				WithTopology(report.Host).
 				WithLatestActiveControls(activeControl).
 				WithLatest("node_role", mtime.Now(), strings.Join(nodeRoles, ",")).
-				WithLatest("cluster_uuid", mtime.Now(), vars.ClusterUUID),
+				WithLatest("cluster_uuid", mtime.Now(), vars.ClusterUUID).
+				WithLatest(ContainerRuntimeVersion, mtime.Now(), n.Status.NodeInfo.ContainerRuntimeVersion),
 		)
 	}
 	return result, nil

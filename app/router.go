@@ -207,7 +207,10 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 					nodeName, _ := node.Latest.Lookup("host_name")
 					if nodeName != "" {
 						tmpNode := clusterNodes.GetNode(nodeName)
-						rpt.Host.Nodes[key] = rpt.Host.Nodes[key].WithLatest("kubernetes.node-role", time.Now(), tmpNode.NodeRole)
+						rpt.Host.Nodes[key] = rpt.Host.Nodes[key].WithLatests(map[string]string{
+							"kubernetes.node-role":      tmpNode.NodeRole,
+							"container-runtime-version": tmpNode.RuntimeVersion,
+						})
 					}
 					if key != "" {
 						//处理节点授权信息
@@ -235,12 +238,14 @@ func RegisterReportPostHandler(a Adder, router *mux.Router) {
 
 				case "kubernetes_cordon_node":
 					tidy = true
-					var nodeName, nodeRole string
+					var nodeName, nodeRole, runtimeVersion string
 					nodeName = strings.Replace(node.ID, ";<host>", "", -1)
 					if nodeName != "" {
 						nodeRole, _ = node.Latest.Lookup("node_role")
+						runtimeVersion, _ = node.Latest.Lookup(report.ContainerRuntimeVersion)
 						tmpNode := clusterNodes.GetNode(nodeName)
 						tmpNode.NodeRole = nodeRole
+						tmpNode.RuntimeVersion = runtimeVersion
 						clusterNodes.SetNode(nodeName, tmpNode)
 					}
 				}
