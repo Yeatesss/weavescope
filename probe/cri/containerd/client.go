@@ -400,6 +400,9 @@ func (c *CriClient) nativeCtrToContainer(nativeContainer *native.Container) (*do
 	container.State.Paused = dockercompatContainer.State.Paused
 	container.State.Pid = dockercompatContainer.State.Pid
 	container.State.Restarting = dockercompatContainer.State.Restarting
+	if container.State.Paused {
+		dockercompatContainer.State.Running = true
+	}
 	container.State.Running = dockercompatContainer.State.Running
 	container.State.Status = dockercompatContainer.State.Status
 

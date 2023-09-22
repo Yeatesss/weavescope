@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"syscall"
 
-	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
 	log "github.com/sirupsen/logrus"
@@ -75,7 +74,7 @@ func (r *registry) pauseContainer(containerID string, _ http.Request) error {
 		if err != nil {
 			return err
 		}
-		t, err := container.Task(ns, cio.NewAttach())
+		t, err := container.Task(ns, nil)
 		if err == nil {
 			// found existing task
 			return t.Pause(ns)
@@ -103,7 +102,7 @@ func (r *registry) stopContainer(containerID string, _ http.Request) error {
 		if err != nil {
 			return err
 		}
-		t, err := container.Task(ns, cio.NewAttach())
+		t, err := container.Task(ns, nil)
 		if err == nil {
 			// found existing task
 			return t.Kill(ns, syscall.SIGKILL)
@@ -131,13 +130,13 @@ func (r *registry) startContainer(containerID string, _ http.Request) error {
 		if err != nil {
 			return err
 		}
-		t, err := container.Task(ns, cio.NewAttach())
+		t, err := container.Task(ns, nil)
 		if err == nil {
 			// found existing task
 			return nil
 		} else if errdefs.IsNotFound(err) {
 			// task not found, container not running
-			t, err = container.NewTask(ns, cio.NewCreator())
+			t, err = container.NewTask(ns, nil)
 			if err != nil {
 				return err
 			}
@@ -181,7 +180,7 @@ func (r *registry) unpauseContainer(containerID string, _ http.Request) error {
 		if err != nil {
 			return err
 		}
-		t, err := container.Task(ns, cio.NewAttach())
+		t, err := container.Task(ns, nil)
 		if err == nil {
 			// found existing task
 			return t.Resume(ns)
