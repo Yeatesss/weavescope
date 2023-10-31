@@ -130,9 +130,10 @@ type probeFlags struct {
 	useEbpfConn bool // Enable connection tracking with eBPF
 	procRoot    string
 
-	dockerEnabled  bool
-	dockerInterval time.Duration
-	dockerBridge   string
+	autoContainerRuntime bool
+	dockerEnabled        bool
+	dockerInterval       time.Duration
+	dockerBridge         string
 
 	criEnabled  bool
 	criEndpoint string
@@ -335,6 +336,7 @@ func setupFlags(flags *flags) {
 	flag.BoolVar(&flags.probe.procEnabled, "probe.processes", true, "produce process topology & include procspied connections")
 	flag.BoolVar(&flags.probe.useEbpfConn, "probe.ebpf.connections", true, "enable connection tracking with eBPF")
 
+	flag.BoolVar(&flags.probe.autoContainerRuntime, "probe.auto-runtime", false, "automatic selection of container runtime")
 	// Docker
 	flag.BoolVar(&flags.probe.dockerEnabled, "probe.docker", false, "collect Docker-related attributes for processes")
 	flag.DurationVar(&flags.probe.dockerInterval, "probe.docker.interval", 10*time.Second, "how often to update Docker attributes")
@@ -533,7 +535,25 @@ func main() {
 	if flags.app.controlHost == "" {
 		flags.app.controlHost = os.Getenv("CONTROL_HOST")
 	}
+	if flags.probe.autoContainerRuntime && !flags.probe.dockerEnabled && !flags.probe.containerdEnabled {
+		//判断/run/containerd/containerd.sock是否为目录
 
+		info, err := os.Stat("/var/run/docker.sock")
+		if err == nil && !info.IsDir() {
+			flags.probe.dockerEnabled = true
+			log.Infof("Use container runtime:%s", "docker")
+
+		}
+
+		if !flags.probe.dockerEnabled {
+			info, err := os.Stat("/run/containerd/containerd.sock")
+
+			if err == nil && !info.IsDir() {
+				flags.probe.containerdEnabled = true
+				log.Infof("Use container runtime:%s", "containerd")
+			}
+		}
+	}
 	flags.probe.password = getPassword(flags.probe.password, flags.probe.passwordFilename)
 	flags.app.password = getPassword(flags.app.password, flags.app.passwordFilename)
 

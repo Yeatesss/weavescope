@@ -241,10 +241,18 @@ func (c *CriClient) ListImages(options docker.ListImagesOptions) (res []docker.A
 				logger.Logger.Error("get oci platforms failed", "name", image.Name)
 				continue
 			}
-
-			size, err := imgutil.UnpackedImageSize(nsCtx, snapshotClient, containerd.NewImageWithPlatform(c.client, image, platforms.OnlyStrict(ociPlatforms[0])))
+			fmt.Println("image:", image)
+			fmt.Println("ociPlatforms:", ociPlatforms)
+			ociPlatform := ociPlatforms[0]
+			for _, platform := range ociPlatforms {
+				if platform.Architecture == "amd64" {
+					ociPlatform = platform
+					break
+				}
+			}
+			size, err := imgutil.UnpackedImageSize(nsCtx, snapshotClient, containerd.NewImageWithPlatform(c.client, image, platforms.OnlyStrict(ociPlatform)))
 			if err != nil {
-				logger.Logger.Error("get image size failed", "name", image.Name)
+				logger.Logger.Error("get image size failed", "name", image.Name, "d:", err)
 				continue
 			}
 			res = append(res, docker.APIImages{
