@@ -3,6 +3,7 @@ package containerd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/coocood/freecache"
 	"strings"
 	"sync"
@@ -125,6 +126,9 @@ func (r *registry) loop() {
 	}
 }
 
+var event = make(<-chan *events.Envelope, 1024)
+var checkEvent = make(chan *events.Envelope, 1024)
+
 func (r *registry) listenForEvents() bool {
 	// First we empty the store lists.
 	// This ensure any containers that went away in between calls to
@@ -136,7 +140,6 @@ func (r *registry) listenForEvents() bool {
 	// after listing but before listening for events.
 	// Use a buffered chan so the client library can run ahead of the listener
 	// - Docker will drop an event if it is not collected quickly enough.
-	event := make(<-chan *events.Envelope, 1024)
 	errs := make(<-chan error, 1024)
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -166,15 +169,26 @@ func (r *registry) listenForEvents() bool {
 
 	otherUpdates := time.Tick(r.interval)
 	for {
+		//fmt.Println(66666666, time.Now().Local().Format("2006-01-02 15:04:05"))
 		select {
-		case event, ok := <-event:
+		case eve, ok := <-checkEvent:
+			//fmt.Println(1111111, eve.Event)
 			if !ok {
 				log.Errorf("containerd registry: event listener unexpectedly disconnected")
 				return true
 			}
-			r.handleEvent(event)
+			r.handleEvent(eve)
+
+		case eve, ok := <-event:
+			//fmt.Println(22222222, eve.Event)
+			if !ok {
+				log.Errorf("containerd registry: event listener unexpectedly disconnected")
+				return true
+			}
+			r.handleEvent(eve)
 
 		case <-otherUpdates:
+			//fmt.Println(333333333)
 			if err := r.updateImages(); err != nil {
 				log.Errorf("docker registry: %s", err)
 				return true
@@ -184,9 +198,10 @@ func (r *registry) listenForEvents() bool {
 				return true
 			}
 		case cherr := <-errs:
+			//fmt.Println(444444444)
 			log.Errorf("containerd event err: %s", cherr)
 		case ch := <-r.quit:
-
+			//fmt.Println(5555555)
 			run := func() {
 				r.Lock()
 				defer r.Unlock()
@@ -334,6 +349,7 @@ var updateDelContainerState = func(r *registry, containerID string) error {
 }
 
 var ctrCreateSign = freecache.NewCache(1024 * 1024)
+var ctrTasks = make(map[string]int)
 
 func (r *registry) handleEvent(eventAc *events.Envelope) {
 	evt, err := typeurl.UnmarshalAny(eventAc.Event)
@@ -343,8 +359,21 @@ func (r *registry) handleEvent(eventAc *events.Envelope) {
 	//event.Time = env.Timestamp.Unix()
 	switch v := evt.(type) {
 	case *apiEvent.ContainerCreate:
-		ctrCreateSign.Set([]byte(v.ID), []byte{}, 30)
-		//updateContainerState(r, v.ID)
+		_, err = ctrCreateSign.Get([]byte(v.ID))
+		if !errors.Is(err, freecache.ErrNotFound) {
+			ctrCreateSign.Del([]byte(v.ID))
+			updateContainerState(r, v.ID)
+		} else {
+			ctrCreateSign.Set([]byte(v.ID), []byte{}, 40)
+			go func() {
+				time.Sleep(20 * time.Second)
+				_, err = ctrCreateSign.Get([]byte(v.ID))
+				if !errors.Is(err, freecache.ErrNotFound) {
+					checkEvent <- eventAc
+				}
+			}()
+		}
+
 	case *apiEvent.ContainerUpdate:
 		updateContainerState(r, v.ID)
 	case *apiEvent.TaskPaused:
@@ -353,9 +382,19 @@ func (r *registry) handleEvent(eventAc *events.Envelope) {
 		updateContainerState(r, v.ContainerID)
 	case *apiEvent.TaskCreate:
 		_, err = ctrCreateSign.Get([]byte(v.ContainerID))
+		ctrTasks[v.ContainerID]++
 		if !errors.Is(err, freecache.ErrNotFound) {
+			ctrCreateSign.Del([]byte(v.ContainerID))
 			updateContainerState(r, v.ContainerID)
 		}
+	case *apiEvent.TaskExit:
+		ctrTasks[v.ContainerID]--
+		if ctrTasks[v.ContainerID] <= 0 {
+			delete(ctrTasks, v.ContainerID)
+			fmt.Println("exit", v.ContainerID)
+			updateContainerState(r, v.ContainerID)
+		}
+
 	case *apiEvent.ContainerDelete:
 		updateDelContainerState(r, v.ID)
 

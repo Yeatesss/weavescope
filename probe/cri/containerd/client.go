@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -199,7 +200,7 @@ func (c *CriClient) InspectContainerWithContext(containerID string, ctx context.
 		return nil, err
 	}
 	nativeCtr.Image = image.Target().Digest.Hex()
-	container, err := c.nativeCtrToContainer(nativeCtr)
+	container, err := c.nativeCtrToContainer(ctx, ctr, nativeCtr)
 	if err != nil {
 		return nil, err
 	}
@@ -241,8 +242,8 @@ func (c *CriClient) ListImages(options docker.ListImagesOptions) (res []docker.A
 				logger.Logger.Error("get oci platforms failed", "name", image.Name)
 				continue
 			}
-			fmt.Println("image:", image)
-			fmt.Println("ociPlatforms:", ociPlatforms)
+			//logger.Logger.Debug("image:", image)
+			//logger.Logger.Debug("ociPlatforms:", ociPlatforms)
 			ociPlatform := ociPlatforms[0]
 			for _, platform := range ociPlatforms {
 				if platform.Architecture == "amd64" {
@@ -357,12 +358,15 @@ func (c *CriClient) Stats(options docker.StatsOptions) error {
 	panic("implement me")
 }
 
-func (c *CriClient) nativeCtrToContainer(nativeContainer *native.Container) (*docker.Container, error) {
+func (c *CriClient) nativeCtrToContainer(ctx context.Context, oriCtr containerd.Container, nativeContainer *native.Container) (*docker.Container, error) {
 	dockercompatContainer, err := dockercompat.ContainerFromNative(nativeContainer)
 	if err != nil {
 		return nil, err
 	}
-
+	//a, _ := jsoniter.MarshalToString(nativeContainer)
+	//b, _ := jsoniter.MarshalToString(dockercompatContainer)
+	//fmt.Println(1111111111, a)
+	//fmt.Println(222222222, b)
 	// Container format transformation
 	var container = &docker.Container{}
 	container.ID = dockercompatContainer.ID
@@ -405,14 +409,30 @@ func (c *CriClient) nativeCtrToContainer(nativeContainer *native.Container) (*do
 	if err != nil {
 		return nil, err
 	}
-	container.State.Paused = dockercompatContainer.State.Paused
-	container.State.Pid = dockercompatContainer.State.Pid
-	container.State.Restarting = dockercompatContainer.State.Restarting
-	if container.State.Paused {
-		dockercompatContainer.State.Running = true
-	}
-	container.State.Running = dockercompatContainer.State.Running
 	container.State.Status = dockercompatContainer.State.Status
+	if container.State.Status == "" {
+		status := formatter.ContainerStatus(ctx, oriCtr)
+		switch {
+		case strings.Contains(status, "Up"):
+			container.State.Running = true
+		case strings.Contains(status, "Created"):
+			container.State.Running = false
+		case strings.Contains(status, "Restarting"):
+			container.State.Running = true
+			container.State.Restarting = true
+		}
+	} else {
+		container.State.Paused = dockercompatContainer.State.Paused
+		container.State.Pid = dockercompatContainer.State.Pid
+		container.State.Restarting = dockercompatContainer.State.Restarting
+		if container.State.Paused {
+			dockercompatContainer.State.Running = true
+		}
+		if dockercompatContainer.State.Status == "exited" {
+			container.State.StartedAt = container.Created
+		}
+		container.State.Running = dockercompatContainer.State.Running
+	}
 
 	// Container format transformation
 	container.Image = nativeContainer.Image
@@ -483,6 +503,8 @@ func (c *CriClient) nativeCtrToContainer(nativeContainer *native.Container) (*do
 	container.RestartCount = dockercompatContainer.RestartCount
 	container.AppArmorProfile = dockercompatContainer.AppArmorProfile
 	container.Platform = dockercompatContainer.Platform
+	//d, _ := jsoniter.MarshalToString(container)
+	//fmt.Println(33333333333, d)
 
 	return container, nil
 }

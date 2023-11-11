@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -35,21 +34,6 @@ type FindContainer struct {
 
 var SoftFinder = NewSoftwareFinder()
 
-var writeChan = make(chan string, 100)
-
-func init() {
-	go func() {
-		for s := range writeChan {
-			f, e := os.OpenFile(time.Now().Format("2006010215")+".log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if e != nil {
-				panic(e)
-			}
-			f.WriteString(s)
-			f.WriteString("\n")
-		}
-	}()
-
-}
 func NewSoftwareFinder() (finder *SoftwareFinder) {
 	ctrCh := make(chan *FindContainer, 300)
 	finder = &SoftwareFinder{
@@ -116,7 +100,7 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 						finder.CtrSofts.Set([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], "web")), []byte(`[]`), 0)
 						return nil, nil
 					}
-					logger.Logger.Infof("range container softwares: %s", container.Id)
+					logger.Logger.Debugf("range container softwares: %s", container.Id)
 
 					for _, ware := range softWares {
 						if _, ok := softMap[string(ware.Type)]; !ok {
@@ -130,7 +114,7 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 					}
 					for idx, ware := range softMap {
 						if ware != nil && len(ware) > 0 {
-							logger.Logger.Infof("set range container softwares: %s,%s", container.Id, container.Labels["master_pid"])
+							logger.Logger.Debugf("set range container softwares: %s,%s", container.Id, container.Labels["master_pid"])
 
 							var sets []string
 							for _, software := range ware {

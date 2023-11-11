@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	uuid2 "github.com/pborman/uuid"
 	"github.com/tylerb/graceful"
 	common_controls "github.com/weaveworks/scope/common/controls"
 	"github.com/weaveworks/scope/probe/cri/containerd"
@@ -96,8 +95,20 @@ func getNodeSku(customNodeSku bool) string {
 		_, err := os.Stat("/etc/host/ngep-sku")
 		if os.IsNotExist(err) {
 			if customNodeSku {
-				uuid := []byte(uuid2.New())
-				fmt.Println(os.WriteFile("/etc/host/ngep-sku", uuid, 0777))
+				_, err := os.Stat("/etc/host/machine-id")
+				if os.IsNotExist(err) {
+					panic("miss machine-id")
+				} else {
+					machineID, _ := os.ReadFile("/etc/host/machine-id")
+					machineID = bytes.TrimFunc(machineID, func(r rune) bool {
+						return r == '\n' || r == '\t' || r == ' '
+					})
+					for len(machineID) < 64 {
+						machineID = append(machineID, machineID...)
+					}
+					fmt.Println(os.WriteFile("/etc/host/ngep-sku", machineID[:64], 0777))
+
+				}
 				continue
 			} else {
 				fmt.Println("wait ngep-sku")

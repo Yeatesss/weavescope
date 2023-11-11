@@ -231,14 +231,12 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 				_ = jsoniter.Unmarshal(endpointByte, &endpoints)
 
 			} else {
-				endpoints, err = getBindingPorts(process)
+				endpoints, err = getBindingPorts(int64(pid))
 				if err != nil {
 					log.Errorf("Cannot get container process endpoint fail : %v, error: %v", candidate, err)
 				} else {
 					tmpEps, _ := jsoniter.Marshal(endpoints)
-					if bytes.Contains(tmpEps, []byte("udp")) {
-						_ = bindPorts.Set([]byte(containerID+":"+strconv.FormatInt(process.Pid(), 10)), tmpEps, 300)
-					} else {
+					if !bytes.Contains(tmpEps, []byte("udp")) {
 						_ = bindPorts.Set([]byte(containerID+":"+strconv.FormatInt(process.Pid(), 10)), tmpEps, 60*60+rand.Intn(60))
 					}
 				}
@@ -347,10 +345,12 @@ type Endpoint struct {
 	Port      string
 }
 
-func getBindingPorts(ps yprocess.Process) ([]Endpoint, error) {
+func getBindingPorts(pid int64) ([]Endpoint, error) {
 	var endpoints []Endpoint
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	ps := yprocess.NewProcess(pid, nil, command.DisableCache)
+
 	eps, err := core.GetEndpoint(ctx, ps)
 	if err != nil {
 		return endpoints, err

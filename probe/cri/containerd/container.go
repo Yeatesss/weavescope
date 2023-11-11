@@ -371,6 +371,7 @@ func (c *container) getBaseNode() report.Node {
 		}
 	}
 	if len(c.container.NetworkSettings.Networks) > 0 {
+		result.Sets = result.Sets.Delete(report.Network)
 		result = result.WithSets(c.makeNetworkSet())
 	}
 	result = result.AddPrefixPropertyList(LabelPrefix, c.container.Config.Labels)
@@ -401,14 +402,13 @@ func (c *container) makeMountSet() report.Sets {
 
 func (c *container) makeNetworkSet() report.Sets {
 	var networkSlice []string
-
-	networkName := c.container.NetworkSettings.Bridge
+	//networkName := c.container.NetworkSettings.Bridge
 	for mode, network := range c.container.NetworkSettings.Networks {
-		if network.IPAddress != "" {
+		if network.IPAddress != "" || network.MacAddress != "" {
 			networkStr, _ := jsoniter.MarshalToString(cri.NetworkSet{
-				Name:       networkName,
+				Name:       mode,
 				Gateway:    network.Gateway,
-				Mode:       mode,
+				Mode:       networkDrives[mode],
 				IPv6:       network.GlobalIPv6Address,
 				IPv4:       network.IPAddress,
 				NetworkID:  network.NetworkID,
@@ -461,6 +461,7 @@ func (c *container) GetNode() report.Node {
 	}
 
 	result := c.baseNode.WithLatests(latest)
+	result.Sets = result.Sets.Delete(report.Network)
 	result = result.WithSets(c.makeNetworkSet())
 	result = result.WithLatestActiveControls(c.controls()...)
 	result = result.WithMetrics(c.metrics())

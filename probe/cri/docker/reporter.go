@@ -218,9 +218,14 @@ func getLocalIPs() ([]string, []net.IP, error) {
 	return ips, addrs, nil
 }
 
+var networkDrives map[string]string
+
 func (r *Reporter) containerTopology(localAddrs []net.IP) report.Topology {
 	var portBinding = make(map[string]map[string]cri.PortBinding)
-
+	networkDrives = make(map[string]string)
+	r.registry.WalkNetworks(func(network docker_client.Network) {
+		networkDrives[network.Name] = network.Driver
+	})
 	result := report.MakeTopology().
 		WithMetadataTemplates(ContainerMetadataTemplates).
 		WithMetricTemplates(ContainerMetricTemplates).

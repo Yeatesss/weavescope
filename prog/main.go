@@ -426,7 +426,7 @@ func main() {
 
 	flags := flags{}
 	setupFlags(&flags)
-	log2.InitLogger(log3.InfoLevel)
+	log2.InitLogger(log3.DebugLevel)
 	flag.Parse()
 	app.LimitNode = flags.app.limitMode
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)
