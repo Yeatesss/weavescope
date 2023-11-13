@@ -98,7 +98,6 @@ func (t *Tagger) Tag(r report.Report) (report.Report, error) {
 
 var bindPorts = freecache.NewCache(1024 * 64)
 var nsPids = freecache.NewCache(1024 * 64)
-var suspectMap = freecache.NewCache(1024 * 1024)
 
 func SetSuspectMap(containerID, imageName string) {
 	if strings.Contains(imageName, "mongo") ||
@@ -107,16 +106,12 @@ func SetSuspectMap(containerID, imageName string) {
 		strings.Contains(imageName, "sqlserver") ||
 		strings.Contains(imageName, "jboss") ||
 		strings.Contains(imageName, "nginx") {
-		suspectMap.Set([]byte(containerID), []byte("1"), 60)
+		cri.SuspectMap.Set([]byte(containerID), []byte("1"), 60)
 	} else {
-		suspectMap.Set([]byte(containerID), []byte("0"), 60)
+		cri.SuspectMap.Set([]byte(containerID), []byte("0"), 60)
 	}
 }
-func GetSuspectMap(containerID string) bool {
-	exists, _ := suspectMap.Get([]byte(containerID))
-	return string(exists) == "1"
 
-}
 func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopology *report.Topology) {
 	var (
 		ctrProcess = swiss.NewMap[string, core.Processes](42)
@@ -178,7 +173,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 		if c.Container().Config.Labels["io.kubernetes.docker.type"] != "podsandbox" {
 			for _, env := range c.Container().Config.Env {
 				if strings.Contains(env, "PATH=") {
-					SoftFinder.EnvPath.Set([]byte(containerID), []byte(env), 0)
+					cri.SoftFinder.EnvPath.Set([]byte(containerID), []byte(env), 0)
 					break
 				}
 			}
@@ -189,7 +184,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			//新增master pid，用来验证容器唯一性，避免重启
 			labels = append(labels, fmt.Sprintf("master_pid:%d", c.Container().State.Pid))
 			if len(labels) > 0 {
-				SoftFinder.Labels.Set([]byte(containerID), []byte(strings.Join(labels, "[,]")), 0)
+				cri.SoftFinder.Labels.Set([]byte(containerID), []byte(strings.Join(labels, "[,]")), 0)
 			}
 			var processes core.Processes
 			processes, ok = ctrProcess.Get(containerID)
@@ -298,8 +293,8 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 
 	var wg sync.WaitGroup
 	ctrProcess.Iter(func(id string, ps core.Processes) (stop bool) {
-		envPath, _ := SoftFinder.EnvPath.Get([]byte(id))
-		labels, _ := SoftFinder.Labels.Get([]byte(id))
+		envPath, _ := cri.SoftFinder.EnvPath.Get([]byte(id))
+		labels, _ := cri.SoftFinder.Labels.Get([]byte(id))
 		labelMap := make(map[string]string)
 		if len(labels) > 0 {
 			exlabels := strings.Split(string(labels), "[,]")
@@ -334,7 +329,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			}
 		}
 		if node, exists := getContainerTopology(ctr.Id); exists {
-			replaceContainerTopology(ctr.Id, SoftFinder.ParseNodeSet(node, ctr))
+			replaceContainerTopology(ctr.Id, cri.SoftFinder.ParseNodeSet(node, ctr))
 		}
 	}
 

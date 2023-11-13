@@ -1,4 +1,4 @@
-package containerd
+package cri
 
 import (
 	"context"
@@ -13,21 +13,25 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/weaveworks/scope/common/logger"
 	"github.com/weaveworks/scope/report"
-	"golang.org/x/sync/singleflight"
 )
+
+var SuspectMap = freecache.NewCache(1024 * 1024)
 
 const MaxRetryAfter = 60 * 60 * 6 * time.Second
 
-var softwareFinderSingle = singleflight.Group{}
+var ContainerPool = new(sync.Map)
 
 type SoftwareFinder struct {
 	CtrSofts    *freecache.Cache
 	EnvPath     *freecache.Cache
 	Labels      *freecache.Cache
-	ContainerCh chan *FindContainer
+	ContainerCh chan string
 }
 type FindContainer struct {
 	*core.Container
+	doing      bool
+	skip       int  //需要重试时候+1
+	active     bool //是否要执行软件清点
 	retryAfter time.Duration
 	suspect    bool
 }
@@ -35,7 +39,7 @@ type FindContainer struct {
 var SoftFinder = NewSoftwareFinder()
 
 func NewSoftwareFinder() (finder *SoftwareFinder) {
-	ctrCh := make(chan *FindContainer, 300)
+	ctrCh := make(chan string, 300)
 	finder = &SoftwareFinder{
 		ContainerCh: ctrCh,
 		CtrSofts:    freecache.NewCache(10 * 1024 * 1024),
@@ -43,46 +47,66 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 		Labels:      freecache.NewCache(5 * 1024 * 1024),
 	}
 	go func() {
-		var works = sync.Map{}
+		//var works = sync.Map{}
 		var concurrent = make(chan struct{}, 2)
 		for ctr := range ctrCh {
-			if _, ok := works.Load(ctr.Id); ok {
-				continue
-			}
-			works.Store(ctr.Id, struct{}{})
-			//fmt.Println(len(ctrCh))
-			concurrent <- struct{}{}
-			go func(container *FindContainer) {
-				defer func() {
-					<-concurrent
-					works.Delete(container.Id)
-				}()
-				//logger.Logger.Infof("Get Software: %s", container.Id)
+			if findCtrInf, ok := ContainerPool.Load(ctr); ok {
+				//fmt.Println(len(ctrCh))
+				if !findCtrInf.(*FindContainer).active {
+					//如果容器未激活，则等待后重试，多次都未激活说明该容器已消失
+					findCtr := findCtrInf.(*FindContainer)
+					findCtr.skip++
+					if findCtr.skip > 20 {
+						return
+					}
+					time.Sleep(20 * time.Second)
+					logger.Logger.Debugf("wait container software active: %s", findCtr.Id)
+					finder.ContainerCh <- findCtr.Id
+					ContainerPool.Store(findCtr.Id, findCtr)
+					return
+				}
+				//容器已激活，可以进行软件清点
+				findCtr := findCtrInf.(*FindContainer)
+				findCtr.skip = 0
+				findCtr.doing = true
+				findCtr.active = false
+				ContainerPool.Store(findCtr.Id, findCtr)
+				concurrent <- struct{}{}
+				go func(container *FindContainer) {
+					var removeCtrMap bool
+					defer func() {
+						<-concurrent
+						if !removeCtrMap {
+							container.doing = false
+							ContainerPool.Store(container.Id, container)
+						}
 
-				softwareFinderSingle.Do(container.Id, func() (interface{}, error) {
-					webSoft, _ := finder.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], "web")))
-					dbSoft, _ := finder.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], "database")))
+					}()
+					//logger.Logger.Debugf("Get Software: %s", container.Id)
+
+					webSoft, _ := finder.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", container.Id, container.Labels["master_pid"], "web")))
+					dbSoft, _ := finder.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", container.Id, container.Labels["master_pid"], "database")))
 					if len(dbSoft) > 0 || len(webSoft) > 0 {
-						return nil, nil
+						return
 					}
 
 					var softMap = map[string]map[string]*core.Software{"web": make(map[string]*core.Software), "database": make(map[string]*core.Software)}
-					ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second*time.Duration(container.Container.Processes.Len())*1*time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second+time.Duration(container.Container.Processes.Len())*1*time.Second)
 					defer cancel()
-					logger.Logger.Debug("start collect software", "container_id", container.Id, "time", time.Now().Format("2006-01-02 15:04:05"))
-					softWares, err := container_software.NewFinder().Find(ctx, container.Container)
-					logger.Logger.Debug("finish collect software", "container_id", container.Id, "time", time.Now().Format("2006-01-02 15:04:05"))
 					a, _ := jsoniter.MarshalToString(container)
+					logger.Logger.Debug("start collect software", "container_id", container.Id, "container", a, "time", time.Now().Format("2006-01-02 15:04:05"))
+					softWares, err := container_software.NewFinder().Find(ctx, container.Container)
 					s, _ := jsoniter.MarshalToString(softWares)
-					logger.Logger.Debugf("Find Software:%s,Data:%s\nsoft:%s", container.Id, a, s)
+					logger.Logger.Debug("finish collect software", "container_id", container.Id, "time", time.Now().Format("2006-01-02 15:04:05"), "software", s)
 
 					if err != nil {
 						logger.Logger.Errorf("Find ctr software error: %s,%v", container.Id, err)
-						return nil, err
+						ContainerPool.Delete(container.Id)
+						removeCtrMap = true
+						return
 					}
 					if len(softWares) == 0 {
 						container.retryAfter = container.retryAfter * 2
-
 						if container.suspect && container.retryAfter > 60*60*time.Second {
 							container.retryAfter = 60 * 60 * time.Second
 						}
@@ -92,17 +116,18 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 						go func() {
 							time.Sleep(container.retryAfter)
 							logger.Logger.Debugf("Try again to get container applications: %s", container.Id)
-							finder.ContainerCh <- container
+							finder.ContainerCh <- container.Id
 						}()
 						fmt.Println("写入成功", container.Id)
 						logger.Logger.Debugf("Set Empty Software for container: %s", container.Id)
 
-						finder.CtrSofts.Set([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], "web")), []byte(`[]`), 0)
-						return nil, nil
+						//finder.CtrSofts.Set([]byte(fmt.Sprintf("%s%s.%s", container.Id, container.Labels["master_pid"], "web")), []byte(`[]`), 0)
+						return
 					}
 					logger.Logger.Debugf("range container softwares: %s", container.Id)
 
 					for _, ware := range softWares {
+						removeCtrMap = true
 						if _, ok := softMap[string(ware.Type)]; !ok {
 							continue
 						}
@@ -125,14 +150,15 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 							key := fmt.Sprintf("%s%s.%s", container.Id, container.Labels["master_pid"], idx)
 							err := finder.CtrSofts.Set([]byte(key), val, 0)
 							if err != nil {
-								return nil, err
+								logger.Logger.Errorf("Set Container software cache fail:%v", err)
+								return
 							}
 						}
 
 					}
-					return nil, err
-				})
-			}(ctr)
+					return
+				}(findCtr)
+			}
 
 		}
 	}()
@@ -158,15 +184,37 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 	}
 	if !hit {
 		logger.Logger.Infof("Parse Software Not Hit:%s", ctr.Id)
-		select {
-		case s.ContainerCh <- &FindContainer{
+		findCtr := &FindContainer{
 			Container:  ctr,
+			skip:       0,
 			retryAfter: 20 * time.Second,
 			suspect:    GetSuspectMap(ctr.Id),
-		}:
-		default:
-			logger.Logger.Debug("阻塞", ctr.Id)
-			//fmt.Println(len(s.ContainerCh))
+		}
+		ctrpool, ok := ContainerPool.Load(ctr.Id)
+		if ok {
+			//container map 存在容器信息，则更新信息
+			findCtr.retryAfter = ctrpool.(*FindContainer).retryAfter
+			findCtr.skip = ctrpool.(*FindContainer).skip
+			if !ctrpool.(*FindContainer).doing {
+				//如果容器未再执行更新激活状态
+				//logger.Logger.Debug("Update Get Software Container Metadata Active", "container_id", ctr.Id)
+				findCtr.active = true
+			}
+			//logger.Logger.Debug("Update Get Software Container Metadata", "container_id", ctr.Id)
+			ContainerPool.Store(ctr.Id, findCtr)
+		} else {
+			findCtr.active = true
+			ContainerPool.Store(ctr.Id, findCtr)
+			//logger.Logger.Debug("Add Get Software Container Metadata", "container_id", ctr.Id)
+
+			select {
+			case s.ContainerCh <- ctr.Id:
+			default:
+				fmt.Println("阻塞", ctr.Id)
+				ContainerPool.Delete(ctr.Id)
+
+				//fmt.Println(len(s.ContainerCh))
+			}
 		}
 
 	}
@@ -189,4 +237,9 @@ func (m *StrMapWrite) Put(key string, val string) {
 	defer m.Lock.Unlock()
 	m.DataMap.Put(key, val)
 	return
+}
+
+func GetSuspectMap(containerID string) bool {
+	exists, _ := SuspectMap.Get([]byte(containerID))
+	return string(exists) == "1"
 }
