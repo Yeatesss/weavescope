@@ -3,6 +3,7 @@ package cri
 import (
 	"context"
 	"fmt"
+	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -40,18 +41,23 @@ var SoftFinder = NewSoftwareFinder()
 
 func NewSoftwareFinder() (finder *SoftwareFinder) {
 	ctrCh := make(chan string, 300)
+	var concurrent = make(chan struct{}, 2)
+
 	finder = &SoftwareFinder{
 		ContainerCh: ctrCh,
 		CtrSofts:    freecache.NewCache(10 * 1024 * 1024),
 		EnvPath:     freecache.NewCache(5 * 1024 * 1024),
 		Labels:      freecache.NewCache(5 * 1024 * 1024),
 	}
+	go GuaranteedExecution(concurrent) //最终保底，保证肯定能执行
 	go func() {
 		//var works = sync.Map{}
-		var concurrent = make(chan struct{}, 2)
 		for ctr := range ctrCh {
+			logger.Logger.Debugf("find container: %s", ctr)
 			if findCtrInf, ok := ContainerPool.Load(ctr); ok {
-				//fmt.Println(len(ctrCh))
+				var finishChan = make(chan struct{}, 1)
+				logger.Logger.Debugf("find container metadata: %s", ctr)
+
 				if !findCtrInf.(*FindContainer).active {
 					//如果容器未激活，则等待后重试，多次都未激活说明该容器已消失
 					findCtr := findCtrInf.(*FindContainer)
@@ -72,15 +78,38 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 				findCtr.active = false
 				ContainerPool.Store(findCtr.Id, findCtr)
 				concurrent <- struct{}{}
+				logger.Logger.Debugf("new find container task: %s", ctr)
+				go func(containerID string) {
+					timer := time.NewTimer(900 * time.Second)
+					defer timer.Stop()
+					select {
+					case <-finishChan:
+					case <-timer.C:
+						select {
+						case <-concurrent:
+							logger.Logger.Debugf("force container pop:%v", containerID)
+						default:
+							logger.Logger.Debug("force empty container pop")
+						}
+					}
+				}(findCtr.Id)
 				go func(container *FindContainer) {
 					var removeCtrMap bool
+
 					defer func() {
-						<-concurrent
+						finishChan <- struct{}{}
+						close(finishChan)
+						select {
+						case <-concurrent:
+							logger.Logger.Debugf("container pop:%s", container.Id)
+						default:
+							logger.Logger.Debugf("empty container pop:%s", container.Id)
+						}
+						logger.Logger.Debugf("finish find container task: %s,%v", container.Id, removeCtrMap)
 						if !removeCtrMap {
 							container.doing = false
 							ContainerPool.Store(container.Id, container)
 						}
-
 					}()
 					//logger.Logger.Debugf("Get Software: %s", container.Id)
 
@@ -92,6 +121,8 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 
 					var softMap = map[string]map[string]*core.Software{"web": make(map[string]*core.Software), "database": make(map[string]*core.Software)}
 					ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second+time.Duration(container.Container.Processes.Len())*1*time.Second)
+					pprof.SetGoroutineLabels(pprof.WithLabels(context.Background(), pprof.Labels("name", "FindContainer", "container_id", container.Id)))
+
 					defer cancel()
 					a, _ := jsoniter.MarshalToString(container)
 					logger.Logger.Debug("start collect software", "container_id", container.Id, "container", a, "time", time.Now().Format("2006-01-02 15:04:05"))
@@ -169,7 +200,7 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 	for _, softType := range []string{"web", "database"} {
 		if v, err := s.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], softType))); err == nil {
 			var softs []string
-			logger.Logger.Debugf("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
+			//logger.Logger.Debugf("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
 			if err := jsoniter.Unmarshal(v, &softs); err == nil {
 				hit = true
 				if len(softs) > 0 {
@@ -183,7 +214,7 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 		}
 	}
 	if !hit {
-		logger.Logger.Infof("Parse Software Not Hit:%s", ctr.Id)
+		//logger.Logger.Infof("Parse Software Not Hit:%s", ctr.Id)
 		findCtr := &FindContainer{
 			Container:  ctr,
 			skip:       0,
@@ -242,4 +273,42 @@ func (m *StrMapWrite) Put(key string, val string) {
 func GetSuspectMap(containerID string) bool {
 	exists, _ := SuspectMap.Get([]byte(containerID))
 	return string(exists) == "1"
+}
+
+func GuaranteedExecution(concurrent chan struct{}) {
+	var countTwo int64
+	var countOne int64
+	var clearLevelTwo int64 = 20
+	var clearLevelOne int64 = 30
+	for {
+		if len(concurrent) == 2 {
+			countTwo++
+			countOne++
+		} else if len(concurrent) == 1 {
+			countOne++
+			countTwo = 0
+		} else {
+			countTwo = 0
+			countOne = 0
+		}
+		if countTwo > clearLevelTwo {
+			countTwo = 0
+			select {
+			case <-concurrent:
+				logger.Logger.Debug("container pop")
+			default:
+				logger.Logger.Debug("empty container pop")
+			}
+		}
+		if countOne > clearLevelOne {
+			countOne = 0
+			select {
+			case <-concurrent:
+				logger.Logger.Debug("container pop")
+			default:
+				logger.Logger.Debug("empty container pop")
+			}
+		}
+		time.Sleep(20 * time.Second)
+	}
 }

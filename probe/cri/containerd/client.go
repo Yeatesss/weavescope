@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/containerd/containerd/snapshots"
 	"strings"
 	"sync"
 	"time"
@@ -66,7 +67,9 @@ var (
 )
 
 type CriClient struct {
-	client *containerd.Client
+	client         *containerd.Client
+	snapshotClient snapshots.Snapshotter
+	imageSize      sync.Map
 }
 
 func NewCriClient(endpoint string) *CriClient {
@@ -78,7 +81,7 @@ func NewCriClient(endpoint string) *CriClient {
 		log.Fatal(err)
 	}
 	CtrStatsLister = NewCtrStats(client)
-	return &CriClient{client: client}
+	return &CriClient{client: client, snapshotClient: client.SnapshotService("overlayfs"), imageSize: sync.Map{}}
 
 }
 
@@ -218,7 +221,7 @@ func (c *CriClient) InspectContainerWithContext(containerID string, ctx context.
 }
 
 func (c *CriClient) ListImages(options docker.ListImagesOptions) (res []docker.APIImages, err error) {
-	snapshotClient := c.client.SnapshotService("overlayfs")
+	var imageSize = make(map[string]int64)
 	err = c.RangeNs(func(ns string) (bool, error) {
 		nsCtx := namespaces.WithNamespace(context.Background(), ns)
 		images, err := images2.NewImagesClient(c.client.Conn()).List(nsCtx, &images2.ListImagesRequest{})
@@ -226,8 +229,9 @@ func (c *CriClient) ListImages(options docker.ListImagesOptions) (res []docker.A
 			return false, err
 		}
 		for _, tmpImage := range images.Images {
+			var size int64
 			image := cimages.Image{
-				Name:      tmpImage.Name,
+				Name:      strings.ReplaceAll(tmpImage.Name, "docker.io/library/", ""),
 				Labels:    tmpImage.Labels,
 				Target:    descFromProto(tmpImage.Target),
 				CreatedAt: protobuf.FromTimestamp(tmpImage.CreatedAt),
@@ -251,11 +255,16 @@ func (c *CriClient) ListImages(options docker.ListImagesOptions) (res []docker.A
 					break
 				}
 			}
-			size, err := imgutil.UnpackedImageSize(nsCtx, snapshotClient, containerd.NewImageWithPlatform(c.client, image, platforms.OnlyStrict(ociPlatform)))
-			if err != nil {
-				logger.Logger.Error("get image size failed", "name", image.Name, "d:", err)
-				continue
+			if tmpSize, ok := c.imageSize.Load(image.Target.Digest.String()); ok {
+				size = tmpSize.(int64)
+			} else {
+				size, err = imgutil.UnpackedImageSize(nsCtx, c.snapshotClient, containerd.NewImageWithPlatform(c.client, image, platforms.OnlyStrict(ociPlatform)))
+				if err != nil {
+					logger.Logger.Error("get image size failed", "name", image.Name, "d:", err)
+					continue
+				}
 			}
+			imageSize[image.Target.Digest.String()] = size
 			res = append(res, docker.APIImages{
 				ID:          image.Target.Digest.String(),
 				RepoTags:    []string{image.Name},
@@ -267,6 +276,10 @@ func (c *CriClient) ListImages(options docker.ListImagesOptions) (res []docker.A
 		}
 		return true, nil
 	})
+	c.imageSize = sync.Map{}
+	for key, value := range imageSize {
+		c.imageSize.Store(key, value)
+	}
 	return
 }
 

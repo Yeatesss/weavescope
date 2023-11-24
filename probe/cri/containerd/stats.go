@@ -3,6 +3,7 @@ package containerd
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -121,6 +122,9 @@ func NewCtrStats(client *containerd.Client) *ContainerStatsManage {
 				metrics, merr := client.TaskService().Metrics(ns, &tasks.MetricsRequest{})
 				if merr != nil {
 					log.Errorf("failed to get metrics for namespace %s: %v", ns, merr)
+					if strings.Contains(merr.Error(), "connection refused") {
+						log.Fatal("containerd connection refused")
+					}
 					continue
 				}
 

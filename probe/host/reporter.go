@@ -42,6 +42,7 @@ var osRelease string
 
 func GetOsRelease() {
 	osReleaseData, err := os.ReadFile("/etc/host/os-release")
+	//osReleaseData, err := os.ReadFile("/etc/os-release")
 	if err != nil {
 		log.Fatal(err)
 	}

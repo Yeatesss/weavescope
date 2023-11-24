@@ -4,20 +4,22 @@ import (
 	"compress/gzip"
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"net"
-	"os"
-	"regexp"
-	"runtime"
-	"strconv"
-	"strings"
-	"time"
+	_ "go.uber.org/automaxprocs"
 
 	log2 "github.com/Yeatesss/container-software/pkg/log"
 	log3 "github.com/charmbracelet/log"
 	"github.com/weaveworks/common/user"
 	"github.com/weaveworks/scope/common/performance_analyzer"
 	"github.com/weaveworks/scope/common/target"
+	"io/ioutil"
+	"net"
+	_ "net/http/pprof"
+	"os"
+	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -426,7 +428,7 @@ func main() {
 
 	flags := flags{}
 	setupFlags(&flags)
-	log2.InitLogger(log3.DebugLevel)
+	log2.InitLogger(log3.InfoLevel)
 	flag.Parse()
 	app.LimitNode = flags.app.limitMode
 	app.AddContainerFilters(append(flags.containerLabelFilterFlags.apiTopologyOptions, flags.containerLabelFilterFlagsExclude.apiTopologyOptions...)...)

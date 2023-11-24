@@ -17,7 +17,6 @@ import (
 	"github.com/Yeatesss/container-software/core"
 	"github.com/Yeatesss/container-software/pkg/command"
 	yprocess "github.com/Yeatesss/container-software/pkg/proc/process"
-	"github.com/coocood/freecache"
 	"github.com/dolthub/swiss"
 	docker_client "github.com/fsouza/go-dockerclient"
 	jsoniter "github.com/json-iterator/go"
@@ -96,9 +95,6 @@ func (t *Tagger) Tag(r report.Report) (report.Report, error) {
 	return r, nil
 }
 
-var bindPorts = freecache.NewCache(1024 * 64)
-var nsPids = freecache.NewCache(1024 * 64)
-
 func SetSuspectMap(containerID, imageName string) {
 	if strings.Contains(imageName, "mongo") ||
 		strings.Contains(imageName, "postgre") ||
@@ -170,7 +166,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			SetSuspectMap(containerID, imageName)
 			node = node.WithParent(report.ContainerImage, report.MakeContainerImageNodeID(imageName))
 		}
-		if c.Container().Config.Labels["io.kubernetes.docker.type"] != "podsandbox" {
+		if c.Container().Config.Labels["io.kubernetes.docker.type"] != "podsandbox" && c.Container().Config.Labels["io.kubernetes.container.name"] != "scope-agent" {
 			for _, env := range c.Container().Config.Env {
 				if strings.Contains(env, "PATH=") {
 					cri.SoftFinder.EnvPath.Set([]byte(containerID), []byte(env), 0)
@@ -222,7 +218,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 			)
 			process := yprocess.NewProcess(int64(pid), nil)
 
-			if endpointByte, err := bindPorts.Get([]byte(containerID + ":" + strconv.FormatInt(process.Pid(), 10))); err == nil {
+			if endpointByte, err := cri.BindPorts.Get([]byte(containerID + ":" + strconv.FormatInt(process.Pid(), 10))); err == nil {
 				_ = jsoniter.Unmarshal(endpointByte, &endpoints)
 
 			} else {
@@ -232,7 +228,7 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 				} else {
 					tmpEps, _ := jsoniter.Marshal(endpoints)
 					if !bytes.Contains(tmpEps, []byte("udp")) {
-						_ = bindPorts.Set([]byte(containerID+":"+strconv.FormatInt(process.Pid(), 10)), tmpEps, 60*60+rand.Intn(60))
+						_ = cri.BindPorts.Set([]byte(containerID+":"+strconv.FormatInt(process.Pid(), 10)), tmpEps, 60*60+rand.Intn(60))
 					}
 				}
 			}
@@ -240,11 +236,11 @@ func (t *Tagger) tag(tree process.Tree, topology *report.Topology, containerTopo
 				nspid    string
 				tmpNspid []byte
 			)
-			if tmpNspid, err = nsPids.Get([]byte(containerID + ":" + strconv.FormatInt(process.Pid(), 10))); err == nil {
+			if tmpNspid, err = cri.NsPids.Get([]byte(containerID + ":" + strconv.FormatInt(process.Pid(), 10))); err == nil {
 				nspid = string(tmpNspid)
 			} else {
 				nspid = getNsPid(process)
-				nsPids.Set([]byte(containerID+":"+strconv.FormatInt(process.Pid(), 10)), []byte(nspid), 0)
+				cri.NsPids.Set([]byte(containerID+":"+strconv.FormatInt(process.Pid(), 10)), []byte(nspid), 0)
 			}
 			node = node.WithLatests(map[string]string{
 				"inside_pid": nspid,
@@ -378,18 +374,16 @@ func getNsPid(ps yprocess.Process) string {
 	return ""
 }
 
-var execCache = freecache.NewCache(1024 * 1024)
-
 func getExe(ps yprocess.Process) string {
 	var exeByte []byte
 	pidStr := strconv.FormatInt(ps.Pid(), 10)
 	defer func() {
 		if len(exeByte) > 0 {
-			execCache.Set([]byte(pidStr), exeByte, 60*2)
+			cri.ExecCache.Set([]byte(pidStr), exeByte, 60*2)
 
 		}
 	}()
-	exeByte, _ = execCache.Get([]byte(pidStr))
+	exeByte, _ = cri.ExecCache.Get([]byte(pidStr))
 	if len(exeByte) > 0 {
 		return string(exeByte)
 	}
@@ -407,18 +401,16 @@ func getExe(ps yprocess.Process) string {
 	return ""
 }
 
-var userCache = freecache.NewCache(1024 * 1024)
-
 func getUser(ps yprocess.Process, envPath string) string {
 	var userByte []byte
 	pidStr := strconv.FormatInt(ps.Pid(), 10)
 	defer func() {
 		if len(userByte) > 0 {
-			userCache.Set([]byte(pidStr), userByte, 60*2)
+			cri.UserCache.Set([]byte(pidStr), userByte, 60*2)
 
 		}
 	}()
-	userByte, _ = userCache.Get([]byte(pidStr))
+	userByte, _ = cri.UserCache.Get([]byte(pidStr))
 	if len(userByte) > 0 {
 		return string(userByte)
 	}

@@ -1,8 +1,10 @@
 package performance_analyzer
 
 import (
+	"context"
 	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/weaveworks/scope/common/logger"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
@@ -12,11 +14,14 @@ import (
 var pyscore *pyroscope.Profiler
 
 const SwitchPyroscope = syscall.Signal(0x25) //37
+const SwitchPprof = syscall.Signal(0x26)     //38
 
 type Analyze struct {
 	serverHost string //pyroscope服务host地址
 	serverName string //当前服务名
 }
+
+var analyzerSvr *http.Server
 
 func NewAnalyze(serverHost string, serverName string) *Analyze {
 	return &Analyze{
@@ -28,13 +33,23 @@ func NewAnalyze(serverHost string, serverName string) *Analyze {
 func (l *Analyze) Start() {
 	quit := make(chan os.Signal, 1)
 
-	signal.Notify(quit, SwitchPyroscope)
+	signal.Notify(quit, SwitchPyroscope, SwitchPprof)
 	for {
 		select {
 		case sign := <-quit:
 			switch sign {
 			case SwitchPyroscope:
 				l.performance()
+			case SwitchPprof:
+				if analyzerSvr == nil {
+					server := &http.Server{Addr: ":9999", Handler: nil}
+					go func() {
+						server.ListenAndServe()
+					}()
+				} else {
+					analyzerSvr.Shutdown(context.Background())
+					analyzerSvr = nil
+				}
 			}
 		}
 	}

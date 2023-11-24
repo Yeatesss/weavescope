@@ -2,6 +2,7 @@ package cri
 
 import (
 	"context"
+	"github.com/coocood/freecache"
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/weaveworks/scope/report"
 	"net"
@@ -47,3 +48,8 @@ type NetworkSet struct {
 	EndpointID string `json:"endpoint_id"`
 	Mac        string `json:"mac"`
 }
+
+var ExecCache = freecache.NewCache(1024 * 1024)
+var UserCache = freecache.NewCache(1024 * 1024)
+var BindPorts = freecache.NewCache(1024 * 64)
+var NsPids = freecache.NewCache(1024 * 64)

@@ -3,7 +3,6 @@ package containerd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/coocood/freecache"
 	"strings"
 	"sync"
@@ -199,7 +198,7 @@ func (r *registry) listenForEvents() bool {
 			}
 		case cherr := <-errs:
 			//fmt.Println(444444444)
-			log.Errorf("containerd event err: %s", cherr)
+			log.Fatalf("containerd event err: %v", cherr)
 		case ch := <-r.quit:
 			//fmt.Println(5555555)
 			run := func() {
@@ -391,7 +390,7 @@ func (r *registry) handleEvent(eventAc *events.Envelope) {
 		ctrTasks[v.ContainerID]--
 		if ctrTasks[v.ContainerID] <= 0 {
 			delete(ctrTasks, v.ContainerID)
-			fmt.Println("exit", v.ContainerID)
+			//fmt.Println("exit", v.ContainerID)
 			updateContainerState(r, v.ContainerID)
 		}
 
