@@ -121,7 +121,8 @@ var (
 	ParsePodNodeID = parseSingleComponentID("pod")
 
 	// MakeServiceNodeID produces a service node ID from its composite parts.
-	MakeServiceNodeID = makeSingleComponentID("service")
+	MakeServiceNodeID       = makeSingleComponentID("service")
+	MakeResourceQuotaNodeID = makeSingleComponentID("resource_quota")
 
 	// ParseServiceNodeID parses a service node ID
 	ParseServiceNodeID = parseSingleComponentID("service")

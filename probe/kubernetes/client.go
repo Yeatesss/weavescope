@@ -38,6 +38,7 @@ type Client interface {
 	WalkDaemonSets(f func(DaemonSet) error) error
 	WalkStatefulSets(f func(StatefulSet) error) error
 	WalkCronJobs(f func(CronJob) error) error
+	WalkResourceQuotas(f func(ResourceQuota) error) error
 	WalkNamespaces(f func(NamespaceResource) error) error
 	WalkPersistentVolumes(f func(PersistentVolume) error) error
 	WalkPersistentVolumeClaims(f func(PersistentVolumeClaim) error) error
@@ -77,6 +78,7 @@ type client struct {
 	client                     *kubernetes.Clientset
 	podStore                   cache.Store
 	serviceStore               cache.Store
+	quotaStore                 cache.Store
 	deploymentStore            cache.Store
 	daemonSetStore             cache.Store
 	statefulSetStore           cache.Store
@@ -163,6 +165,7 @@ func NewClient(config ClientConfig) (Client, error) {
 	result.podStore = NewEventStore(result.triggerPodWatches, cache.MetaNamespaceKeyFunc)
 	result.runReflectorUntil("pods", result.podStore)
 
+	result.quotaStore = result.setupStore("resourcequotas")
 	result.serviceStore = result.setupStore("services")
 	result.nodeStore = result.setupStore("nodes")
 	result.namespaceStore = result.setupStore("namespaces")
@@ -207,6 +210,8 @@ func (c *client) clientAndType(resource string) (rest.Interface, interface{}, er
 	switch resource {
 	case "pods":
 		return c.client.CoreV1().RESTClient(), &apiv1.Pod{}, nil
+	case "resourcequotas":
+		return c.client.CoreV1().RESTClient(), &apiv1.ResourceQuota{}, nil
 	case "services":
 		return c.client.CoreV1().RESTClient(), &apiv1.Service{}, nil
 	case "nodes":
@@ -252,6 +257,15 @@ func (c *client) runReflectorUntil(resource string, store cache.Store) {
 				return true, nil
 			}
 			lw := cache.NewListWatchFromClient(kclient, resource, metav1.NamespaceAll, fields.Everything())
+			//lw.ListFunc = func(options metav1.ListOptions) (runtime.Object, error) {
+			//	d, e := kclient.Get().
+			//		Namespace(metav1.NamespaceAll).
+			//		Resource(resource).
+			//		VersionedParams(&options, metav1.ParameterCodec).
+			//		Do(context.TODO()).
+			//		Get()
+			//	return d, e
+			//}
 			r = cache.NewReflector(lw, itemType, store, 0)
 		}
 
@@ -331,7 +345,15 @@ func (c *client) WalkServices(f func(Service) error) error {
 	}
 	return nil
 }
-
+func (c *client) WalkResourceQuotas(f func(quota ResourceQuota) error) error {
+	for _, m := range c.quotaStore.List() {
+		s := m.(*apiv1.ResourceQuota)
+		if err := f(NewResourceQuota(s)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (c *client) WalkDeployments(f func(Deployment) error) error {
 	if c.deploymentStore == nil {
 		return nil

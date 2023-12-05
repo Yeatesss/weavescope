@@ -3,6 +3,7 @@ package kubernetes_test
 import (
 	"bytes"
 	"fmt"
+	"github.com/klauspost/compress/zstd"
 	"io"
 	"io/ioutil"
 	"strings"
@@ -84,4 +85,20 @@ func lineCounter(counter map[string]int, pad int, label string, data []byte) {
 		v++
 		counter[line] = v
 	}
+}
+func Compress(in io.Reader, out io.Writer) error {
+	enc, err := zstd.NewWriter(out)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(enc, in)
+	if err != nil {
+		enc.Close()
+		return err
+	}
+	return enc.Close()
+}
+
+func TestCompress(t *testing.T) {
+	Compress(strings.NewReader("hello world"), ioutil.Discard)
 }

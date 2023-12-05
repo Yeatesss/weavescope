@@ -7,7 +7,9 @@ import (
 	docker2 "github.com/weaveworks/scope/probe/cri/docker"
 	"github.com/weaveworks/scope/report"
 	"github.com/weaveworks/scope/tools/vars"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"strconv"
 	"strings"
 )
 
@@ -16,12 +18,19 @@ const (
 	ContainerRuntimeVersion = report.ContainerRuntimeVersion
 
 	IP                 = report.KubernetesIP
+	RequestCPU         = report.KubernetesRequestCPU
+	RequestMemory      = report.KubernetesRequestMemory
+	LimitCPU           = report.KubernetesLimitCPU
+	LimitMemory        = report.KubernetesLimitMemory
 	ObservedGeneration = report.KubernetesObservedGeneration
 	Replicas           = report.KubernetesReplicas
 	DesiredReplicas    = report.KubernetesDesiredReplicas
 	NodeType           = report.KubernetesNodeType
 	Type               = report.KubernetesType
 	ClusterUUID        = report.KubernetesClusterUUID
+	ApplyConfiguration = report.KubernetesApplyConfiguration
+	ExpectedReadyPods  = report.KubernetesExpectedReadyPods
+	ReadyPods          = report.KubernetesReadyPods
 	Ports              = report.KubernetesPorts
 	VolumeClaim        = report.KubernetesVolumeClaim
 	StorageClassName   = report.KubernetesStorageClassName
@@ -204,25 +213,29 @@ var (
 
 // Reporter generate Reports containing Container and ContainerImage topologies
 type Reporter struct {
-	client          Client
-	pipes           controls.PipeClient
-	probeID         string
-	probe           *probe.Probe
-	hostID          string
-	handlerRegistry *controls.HandlerRegistry
-	nodeName        string
+	client                 Client
+	pipes                  controls.PipeClient
+	nsReadyPodsMap         map[string]int64
+	nsExpectedReadyPodsMap map[string]int64
+	probeID                string
+	probe                  *probe.Probe
+	hostID                 string
+	handlerRegistry        *controls.HandlerRegistry
+	nodeName               string
 }
 
 // NewReporter makes a new Reporter
 func NewReporter(client Client, pipes controls.PipeClient, probeID string, hostID string, probe *probe.Probe, handlerRegistry *controls.HandlerRegistry, nodeName string) *Reporter {
 	reporter := &Reporter{
-		client:          client,
-		pipes:           pipes,
-		probeID:         probeID,
-		probe:           probe,
-		hostID:          hostID,
-		handlerRegistry: handlerRegistry,
-		nodeName:        nodeName,
+		client:                 client,
+		nsReadyPodsMap:         make(map[string]int64),
+		nsExpectedReadyPodsMap: make(map[string]int64),
+		pipes:                  pipes,
+		probeID:                probeID,
+		probe:                  probe,
+		hostID:                 hostID,
+		handlerRegistry:        handlerRegistry,
+		nodeName:               nodeName,
 	}
 	reporter.registerControls()
 	client.WatchPods(reporter.podEvent)
@@ -306,7 +319,7 @@ func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
 		//TODO
 		metadata = map[string]string{report.HostId: r.hostNodeID}
 	)
-	for _, topology := range []report.Topology{rpt.Service, rpt.Deployment, rpt.DaemonSet, rpt.StatefulSet, rpt.CronJob, rpt.PersistentVolumeClaim, rpt.PersistentVolume, rpt.StorageClass, rpt.Job, rpt.Namespace, rpt.Pod} {
+	for _, topology := range []report.Topology{rpt.Service, rpt.Deployment, rpt.DaemonSet, rpt.StatefulSet, rpt.CronJob, rpt.PersistentVolumeClaim, rpt.PersistentVolume, rpt.StorageClass, rpt.Job, rpt.Namespace, rpt.Pod, rpt.ResourceQuota} {
 		for _, node := range topology.Nodes {
 			topology.ReplaceNode(node.WithLatests(metadata))
 		}
@@ -331,6 +344,9 @@ func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
 // Report generates a Report containing Container and ContainerImage topologies
 func (r *Reporter) Report() (report.Report, error) {
 	result := report.MakeReport()
+	r.nsReadyPodsMap = make(map[string]int64)
+	r.nsExpectedReadyPodsMap = make(map[string]int64)
+
 	serviceTopology, services, err := r.serviceTopology()
 	if err != nil {
 		return result, err
@@ -379,8 +395,12 @@ func (r *Reporter) Report() (report.Report, error) {
 	if err != nil {
 		return result, err
 	}
-
+	quotaTopology, err := r.quotaTopology()
+	if err != nil {
+		return result, err
+	}
 	result.Pod = result.Pod.Merge(podTopology)
+	result.ResourceQuota = result.ResourceQuota.Merge(quotaTopology)
 	result.Service = result.Service.Merge(serviceTopology)
 	result.DaemonSet = result.DaemonSet.Merge(daemonSetTopology)
 	result.StatefulSet = result.StatefulSet.Merge(statefulSetTopology)
@@ -394,6 +414,17 @@ func (r *Reporter) Report() (report.Report, error) {
 	result.Host = result.Host.Merge(hostTopology)
 
 	return result, nil
+}
+func (r *Reporter) quotaTopology() (report.Topology, error) {
+	var (
+		result = report.MakeTopology()
+	)
+	err := r.client.WalkResourceQuotas(func(quota ResourceQuota) error {
+		result.AddNode(quota.GetNode())
+		return nil
+	})
+	return result, err
+
 }
 
 func (r *Reporter) serviceTopology() (report.Topology, []Service, error) {
@@ -652,7 +683,18 @@ func (r *Reporter) podTopology(services []Service, deployments []Deployment, dae
 		for _, selector := range selectors {
 			selector(p)
 		}
-		pods.AddNode(p.GetNode(r.probeID))
+		pod := p.GetNode(r.probeID)
+		pods.AddNode(pod)
+		state, ok := pod.Latest.Lookup(State)
+		if ok {
+			if state != string(v1.PodSucceeded) {
+				r.nsExpectedReadyPodsMap[p.Namespace()]++
+			}
+			if state == string(v1.PodRunning) {
+				r.nsReadyPodsMap[p.Namespace()]++
+			}
+		}
+
 		return nil
 	})
 	return pods, err
@@ -661,7 +703,10 @@ func (r *Reporter) podTopology(services []Service, deployments []Deployment, dae
 func (r *Reporter) namespaceTopology() (report.Topology, error) {
 	result := report.MakeTopology()
 	err := r.client.WalkNamespaces(func(ns NamespaceResource) error {
-		result.AddNode(ns.GetNode())
+		node := ns.GetNode()
+		node = node.WithLatest(ReadyPods, mtime.Now(), strconv.FormatInt(r.nsReadyPodsMap[ns.Name()], 10))
+		node = node.WithLatest(ExpectedReadyPods, mtime.Now(), strconv.FormatInt(r.nsExpectedReadyPodsMap[ns.Name()], 10))
+		result.AddNode(node)
 		return nil
 	})
 	return result, err
