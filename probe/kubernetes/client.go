@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	v1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sync"
 	"time"
 
@@ -39,6 +41,7 @@ type Client interface {
 	WalkStatefulSets(f func(StatefulSet) error) error
 	WalkCronJobs(f func(CronJob) error) error
 	WalkResourceQuotas(f func(ResourceQuota) error) error
+	WalkIngresses(f func(Ingress) error) error
 	WalkNamespaces(f func(NamespaceResource) error) error
 	WalkPersistentVolumes(f func(PersistentVolume) error) error
 	WalkPersistentVolumeClaims(f func(PersistentVolumeClaim) error) error
@@ -79,6 +82,7 @@ type client struct {
 	podStore                   cache.Store
 	serviceStore               cache.Store
 	quotaStore                 cache.Store
+	ingressStore               cache.Store
 	deploymentStore            cache.Store
 	daemonSetStore             cache.Store
 	statefulSetStore           cache.Store
@@ -164,7 +168,7 @@ func NewClient(config ClientConfig) (Client, error) {
 
 	result.podStore = NewEventStore(result.triggerPodWatches, cache.MetaNamespaceKeyFunc)
 	result.runReflectorUntil("pods", result.podStore)
-
+	result.ingressStore = result.setupStore("ingresses")
 	result.quotaStore = result.setupStore("resourcequotas")
 	result.serviceStore = result.setupStore("services")
 	result.nodeStore = result.setupStore("nodes")
@@ -212,6 +216,8 @@ func (c *client) clientAndType(resource string) (rest.Interface, interface{}, er
 		return c.client.CoreV1().RESTClient(), &apiv1.Pod{}, nil
 	case "resourcequotas":
 		return c.client.CoreV1().RESTClient(), &apiv1.ResourceQuota{}, nil
+	case "ingresses":
+		return c.client.NetworkingV1().RESTClient(), &v1.Ingress{}, nil
 	case "services":
 		return c.client.CoreV1().RESTClient(), &apiv1.Service{}, nil
 	case "nodes":
@@ -257,15 +263,15 @@ func (c *client) runReflectorUntil(resource string, store cache.Store) {
 				return true, nil
 			}
 			lw := cache.NewListWatchFromClient(kclient, resource, metav1.NamespaceAll, fields.Everything())
-			//lw.ListFunc = func(options metav1.ListOptions) (runtime.Object, error) {
-			//	d, e := kclient.Get().
-			//		Namespace(metav1.NamespaceAll).
-			//		Resource(resource).
-			//		VersionedParams(&options, metav1.ParameterCodec).
-			//		Do(context.TODO()).
-			//		Get()
-			//	return d, e
-			//}
+			lw.ListFunc = func(options metav1.ListOptions) (runtime.Object, error) {
+				d, e := kclient.Get().
+					Namespace(metav1.NamespaceAll).
+					Resource(resource).
+					VersionedParams(&options, metav1.ParameterCodec).
+					Do(context.TODO()).
+					Get()
+				return d, e
+			}
 			r = cache.NewReflector(lw, itemType, store, 0)
 		}
 
@@ -346,6 +352,10 @@ func (c *client) WalkServices(f func(Service) error) error {
 	return nil
 }
 func (c *client) WalkResourceQuotas(f func(quota ResourceQuota) error) error {
+	if c.quotaStore == nil {
+		return nil
+	}
+
 	for _, m := range c.quotaStore.List() {
 		s := m.(*apiv1.ResourceQuota)
 		if err := f(NewResourceQuota(s)); err != nil {
@@ -354,6 +364,21 @@ func (c *client) WalkResourceQuotas(f func(quota ResourceQuota) error) error {
 	}
 	return nil
 }
+
+func (c *client) WalkIngresses(f func(quota Ingress) error) error {
+	if c.ingressStore == nil {
+		return nil
+	}
+
+	for _, m := range c.ingressStore.List() {
+		s := m.(*v1.Ingress)
+		if err := f(NewIngress(s)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *client) WalkDeployments(f func(Deployment) error) error {
 	if c.deploymentStore == nil {
 		return nil

@@ -319,7 +319,7 @@ func (r *Tagger) Tag(rpt report.Report) (report.Report, error) {
 		//TODO
 		metadata = map[string]string{report.HostId: r.hostNodeID}
 	)
-	for _, topology := range []report.Topology{rpt.Service, rpt.Deployment, rpt.DaemonSet, rpt.StatefulSet, rpt.CronJob, rpt.PersistentVolumeClaim, rpt.PersistentVolume, rpt.StorageClass, rpt.Job, rpt.Namespace, rpt.Pod, rpt.ResourceQuota} {
+	for _, topology := range []report.Topology{rpt.Service, rpt.Deployment, rpt.DaemonSet, rpt.StatefulSet, rpt.CronJob, rpt.PersistentVolumeClaim, rpt.PersistentVolume, rpt.StorageClass, rpt.Job, rpt.Namespace, rpt.Pod, rpt.ResourceQuota, rpt.Ingress} {
 		for _, node := range topology.Nodes {
 			topology.ReplaceNode(node.WithLatests(metadata))
 		}
@@ -399,8 +399,13 @@ func (r *Reporter) Report() (report.Report, error) {
 	if err != nil {
 		return result, err
 	}
+	ingressTopology, err := r.ingressTopology()
+	if err != nil {
+		return result, err
+	}
 	result.Pod = result.Pod.Merge(podTopology)
 	result.ResourceQuota = result.ResourceQuota.Merge(quotaTopology)
+	result.Ingress = result.Ingress.Merge(ingressTopology)
 	result.Service = result.Service.Merge(serviceTopology)
 	result.DaemonSet = result.DaemonSet.Merge(daemonSetTopology)
 	result.StatefulSet = result.StatefulSet.Merge(statefulSetTopology)
@@ -421,6 +426,17 @@ func (r *Reporter) quotaTopology() (report.Topology, error) {
 	)
 	err := r.client.WalkResourceQuotas(func(quota ResourceQuota) error {
 		result.AddNode(quota.GetNode())
+		return nil
+	})
+	return result, err
+
+}
+func (r *Reporter) ingressTopology() (report.Topology, error) {
+	var (
+		result = report.MakeTopology()
+	)
+	err := r.client.WalkIngresses(func(ingress Ingress) error {
+		result.AddNode(ingress.GetNode())
 		return nil
 	})
 	return result, err

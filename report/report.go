@@ -32,6 +32,7 @@ const (
 	UnuseImage            = "unuse_image"
 	Host                  = "host"
 	ResourceQuota         = "resource_quota"
+	Ingress               = "ingress"
 	Overlay               = "overlay"
 	SwarmService          = "swarm_service"
 	PersistentVolume      = "persistent_volume"
@@ -67,6 +68,7 @@ var topologyNames = []string{
 	UnuseImage,
 	Pod,
 	ResourceQuota,
+	Ingress,
 	Service,
 	Deployment,
 	ReplicaSet,
@@ -104,6 +106,7 @@ type Report struct {
 	Container Topology
 	// ResourceQuota represents the resource constraints inside the cluster.
 	ResourceQuota Topology
+	Ingress       Topology
 	// Pod nodes represent all Kubernetes pods running on hosts running probes.
 	// Metadata includes things like pod id, name etc. Edges are not
 	// present.
@@ -233,6 +236,7 @@ func MakeReport() Report {
 			WithShape(Hexagon).
 			WithLabel("unused image", "unused images"),
 		ResourceQuota: MakeTopology(),
+		Ingress:       MakeTopology(),
 		Host: MakeTopology().
 			WithShape(Circle).
 			WithLabel("host", "hosts"),
@@ -426,6 +430,8 @@ func (r *Report) topology(name string) *Topology {
 		return &r.Pod
 	case ResourceQuota:
 		return &r.ResourceQuota
+	case Ingress:
+		return &r.Ingress
 	case Service:
 		return &r.Service
 	case Deployment:

@@ -123,6 +123,7 @@ var (
 	// MakeServiceNodeID produces a service node ID from its composite parts.
 	MakeServiceNodeID       = makeSingleComponentID("service")
 	MakeResourceQuotaNodeID = makeSingleComponentID("resource_quota")
+	MakeIngressID           = makeSingleComponentID("ingress")
 
 	// ParseServiceNodeID parses a service node ID
 	ParseServiceNodeID = parseSingleComponentID("service")
