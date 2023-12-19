@@ -2,6 +2,8 @@ package performance_analyzer
 
 import (
 	"context"
+	"fmt"
+	"github.com/charmbracelet/log"
 	"github.com/pyroscope-io/client/pyroscope"
 	"github.com/weaveworks/scope/common/logger"
 	"net/http"
@@ -15,6 +17,7 @@ var pyscore *pyroscope.Profiler
 
 const SwitchPyroscope = syscall.Signal(0x25) //37
 const SwitchPprof = syscall.Signal(0x26)     //38
+const SwitchLogLevel = syscall.Signal(0x27)  //39
 
 type Analyze struct {
 	serverHost string //pyroscope服务host地址
@@ -33,11 +36,32 @@ func NewAnalyze(serverHost string, serverName string) *Analyze {
 func (l *Analyze) Start() {
 	quit := make(chan os.Signal, 1)
 
-	signal.Notify(quit, SwitchPyroscope, SwitchPprof)
+	signal.Notify(quit, SwitchPyroscope, SwitchPprof, SwitchLogLevel)
 	for {
 		select {
 		case sign := <-quit:
 			switch sign {
+			case SwitchLogLevel:
+				switch logger.Logger.GetLevel() {
+				case log.InfoLevel:
+					fmt.Println("Swith log level to debug")
+					logger.Logger = log.NewWithOptions(os.Stdout, log.Options{
+						Level:           log.DebugLevel,
+						ReportCaller:    true,
+						ReportTimestamp: true,
+						TimeFormat:      "2006-01-02 15:04:05",
+						Prefix:          "Proxy 🍪 ",
+					})
+				case log.DebugLevel:
+					fmt.Println("Swith log level to info")
+					logger.Logger = log.NewWithOptions(os.Stdout, log.Options{
+						Level:           log.InfoLevel,
+						ReportCaller:    true,
+						ReportTimestamp: true,
+						TimeFormat:      "2006-01-02 15:04:05",
+						Prefix:          "Proxy 🍪 ",
+					})
+				}
 			case SwitchPyroscope:
 				l.performance()
 			case SwitchPprof:

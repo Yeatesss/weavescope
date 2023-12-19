@@ -464,10 +464,14 @@ var boolToString = map[bool]string{true: "1", false: "0"}
 func (c *container) GetNode() report.Node {
 	c.RLock()
 	defer c.RUnlock()
+	var stateStr = c.StateString()
+	if c.State() == "Removal In Progress" {
+		stateStr = "deleted"
+	}
 	latest := map[string]string{
 		ContainerPrivileged: boolToString[c.container.HostConfig.Privileged],
 		ContainerName:       strings.TrimPrefix(c.container.Name, "/"),
-		ContainerState:      c.StateString(),
+		ContainerState:      stateStr,
 		ContainerStateHuman: c.State(),
 	}
 	//	c.container.HostConfig.Privileged
