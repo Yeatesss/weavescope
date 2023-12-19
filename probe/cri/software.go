@@ -111,7 +111,7 @@ func NewSoftwareFinder() (finder *SoftwareFinder) {
 							ContainerPool.Store(container.Id, container)
 						}
 					}()
-					//logger.Logger.Debugf("Get Software: %s", container.Id)
+					logger.Logger.Debugf("Get Software: %s", container.Id)
 
 					webSoft, _ := finder.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", container.Id, container.Labels["master_pid"], "web")))
 					dbSoft, _ := finder.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", container.Id, container.Labels["master_pid"], "database")))
@@ -200,7 +200,7 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 	for _, softType := range []string{"web", "database"} {
 		if v, err := s.CtrSofts.Get([]byte(fmt.Sprintf("%s%s.%s", ctr.Id, ctr.Labels["master_pid"], softType))); err == nil {
 			var softs []string
-			//logger.Logger.Debugf("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
+			logger.Logger.Debugf("Parse Software for container: %s, type: %s,data: %s", ctr.Id, softType, string(v))
 			if err := jsoniter.Unmarshal(v, &softs); err == nil {
 				hit = true
 				if len(softs) > 0 {
@@ -214,7 +214,7 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 		}
 	}
 	if !hit {
-		//logger.Logger.Infof("Parse Software Not Hit:%s", ctr.Id)
+		logger.Logger.Debugf("Parse Software Not Hit:%s", ctr.Id)
 		findCtr := &FindContainer{
 			Container:  ctr,
 			skip:       0,
@@ -228,15 +228,15 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 			findCtr.skip = ctrpool.(*FindContainer).skip
 			if !ctrpool.(*FindContainer).doing {
 				//如果容器未再执行更新激活状态
-				//logger.Logger.Debug("Update Get Software Container Metadata Active", "container_id", ctr.Id)
+				logger.Logger.Debug("Update Get Software Container Metadata Active", "container_id", ctr.Id)
 				findCtr.active = true
 			}
-			//logger.Logger.Debug("Update Get Software Container Metadata", "container_id", ctr.Id)
+			logger.Logger.Debug("Update Get Software Container Metadata", "container_id", ctr.Id)
 			ContainerPool.Store(ctr.Id, findCtr)
 		} else {
 			findCtr.active = true
 			ContainerPool.Store(ctr.Id, findCtr)
-			//logger.Logger.Debug("Add Get Software Container Metadata", "container_id", ctr.Id)
+			logger.Logger.Debug("Add Get Software Container Metadata", "container_id", ctr.Id)
 
 			select {
 			case s.ContainerCh <- ctr.Id:
