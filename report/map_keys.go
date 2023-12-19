@@ -80,6 +80,7 @@ const (
 	KubernetesFullyLabeledReplicas = "kubernetes_fully_labeled_replicas"
 	KubernetesState                = "kubernetes_state"
 	KubernetesIsInHostNetwork      = "kubernetes_is_in_host_network"
+	KubernetesIsStaticPod          = "kubernetes_is_static_pod"
 	KubernetesRestartCount         = "kubernetes_restart_count"
 	KubernetesHostIP               = "kubernetes_host_ip"
 	KubernetesHostName             = "kubernetes_host_name"

@@ -15,6 +15,7 @@ import (
 const (
 	State            = report.KubernetesState
 	IsInHostNetwork  = report.KubernetesIsInHostNetwork
+	IsStaticPod      = report.KubernetesIsStaticPod
 	RestartCount     = report.KubernetesRestartCount
 	HostIP           = report.KubernetesHostIP
 	NodeName         = report.KubernetesHostName
@@ -123,6 +124,11 @@ func (p *pod) GetNode(probeID string) report.Node {
 	}
 	if p.Pod.Spec.HostNetwork {
 		latests[IsInHostNetwork] = "true"
+	}
+	for annotationKey, annotationValue := range p.Pod.Annotations {
+		if annotationKey == "kubernetes.io/config.source" && (annotationValue == "file" || annotationValue == "http") {
+			latests[report.KubernetesIsStaticPod] = "true"
+		}
 	}
 
 	return p.MetaNode(report.MakePodNodeID(p.UID())).WithLatests(latests).
