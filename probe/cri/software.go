@@ -215,6 +215,7 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 	}
 	if !hit {
 		logger.Logger.Debugf("Parse Software Not Hit:%s", ctr.Id)
+		ctr = ProcessCrop(ctr)
 		findCtr := &FindContainer{
 			Container:  ctr,
 			skip:       0,
@@ -243,8 +244,6 @@ func (s *SoftwareFinder) ParseNodeSet(node report.Node, ctr *core.Container) rep
 			default:
 				fmt.Println("阻塞", ctr.Id)
 				ContainerPool.Delete(ctr.Id)
-
-				//fmt.Println(len(s.ContainerCh))
 			}
 		}
 
@@ -310,5 +309,29 @@ func GuaranteedExecution(concurrent chan struct{}) {
 			}
 		}
 		time.Sleep(20 * time.Second)
+	}
+}
+
+func ProcessCrop(ctr *core.Container) *core.Container {
+	if len(ctr.Processes) <= 6 {
+		return ctr
+	}
+	var processNum int64
+	var processes core.Processes
+	for _, process := range ctr.Processes {
+		processNum++
+		if processNum >= 6 {
+			break
+		}
+		if len(process.ChildPids()) > 6 {
+			process.SetChildPids(process.ChildPids()[:6])
+		}
+		processes = append(processes, process)
+	}
+	return &core.Container{
+		Id:        ctr.Id,
+		EnvPath:   ctr.EnvPath,
+		Labels:    ctr.Labels,
+		Processes: processes,
 	}
 }
