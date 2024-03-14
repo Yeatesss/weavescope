@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	jsoniter "github.com/json-iterator/go"
 	"net/http"
@@ -65,6 +66,9 @@ func (c *appClient) GetNodeLimitFromControlGateway() (*NodeLimit, error) {
 
 	if err := json.NewDecoder(resp.Body).Decode(&controRes); err != nil {
 		return nil, err
+	}
+	if controRes.Code != 0 {
+		return nil, errors.New("failed to get authorization")
 	}
 	return &controRes.Data, nil
 }

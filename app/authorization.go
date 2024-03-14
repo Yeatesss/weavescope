@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -33,65 +34,85 @@ func NewAuthorization(appConfig AppConfig) *Authorization {
 	fmt.Println("Control Proxy host:", os.Getenv("CONTROL_PROXY_HOST"))
 	switch appConfig.Identity {
 	case "master":
-		var err error
-		gatewayU, err := url.Parse(os.Getenv("CONTROL_GATEWAY_HOST"))
-		gatewayClient := httpclient.NewAppClient(httpclient.AppConfig{
-			Insecure: appConfig.Insecure,
-			Identity: appConfig.Identity,
-		}, *gatewayU)
-		res, err := gatewayClient.GetNodeLimitFromControlGateway()
-		if err == nil {
-			LimitNode = res.Limit
-			AutoAuthorize = res.AutoAuthorize
-			for _, rp := range res.Nodes {
-				AuthorizeNodeList.Set(rp)
-			}
-			log.Infof("Node limit: %d,Auth authorize:%v,Node list length:%v", LimitNode, AutoAuthorize, AuthorizeNodeList.Len())
-		} else {
-			log.Errorf("Error setting node limit: %v", err)
-		}
 		go func() {
-			log.Infof("Push node limit to slaves")
-			for signal := range pushSlaveSignal {
-				tmpNodeLimit := httpclient.NodeLimit{
-					AutoAuthorize: false,
-					Limit:         LimitNode,
-					Nodes:         AuthorizeNodeList.NodesSlice,
-				}
-				do := func(addrs string) error {
-					var targetHost string
-					addrSlice := strings.Split(addrs, ",")
-					u, _ := url.Parse(addrSlice[0])
-					if len(addrSlice) > 1 {
-						targetHost = addrSlice[1]
+			var err error
+			gatewayU, err := url.Parse(os.Getenv("CONTROL_GATEWAY_HOST"))
+			gatewayClient := httpclient.NewAppClient(httpclient.AppConfig{
+				Insecure: appConfig.Insecure,
+				Identity: appConfig.Identity,
+			}, *gatewayU)
+			go func() {
+				log.Infof("Push node limit to slaves")
+				for signal := range pushSlaveSignal {
+					tmpNodeLimit := httpclient.NodeLimit{
+						AutoAuthorize: false,
+						Limit:         LimitNode,
+						Nodes:         AuthorizeNodeList.NodesSlice,
 					}
-					httpclient.NewAppClient(httpclient.AppConfig{
-						Insecure:   appConfig.Insecure,
-						Identity:   appConfig.Identity,
-						TargetHost: targetHost,
-					}, *u).SetSlaveNodeLimit(&tmpNodeLimit)
-					return nil
+					do := func(addrs string) error {
+						var targetHost string
+						addrSlice := strings.Split(addrs, ",")
+						if !strings.Contains(addrSlice[0], "http") {
+							addrSlice[0] = "https://" + addrSlice[0]
+						}
+						u, ue := url.Parse(addrSlice[0])
+						fmt.Println(ue)
+						if len(addrSlice) > 1 {
+							targetHost = addrSlice[1]
+						}
+						er := httpclient.NewAppClient(httpclient.AppConfig{
+							Insecure:   appConfig.Insecure,
+							Identity:   appConfig.Identity,
+							TargetHost: targetHost,
+						}, *u).SetSlaveNodeLimit(&tmpNodeLimit)
+						if er != nil {
+							log.Error(er)
+						}
+						return nil
+					}
+					if signal == "all" {
+						SlaveCollectors.Range(do)
+					} else {
+						do(signal)
+					}
 				}
-				if signal == "all" {
-					SlaveCollectors.Range(do)
-				} else {
-					do(signal)
+			}()
+		Retry:
+			res, err := gatewayClient.GetNodeLimitFromControlGateway()
+			if err == nil {
+				LimitNode = res.Limit
+				AutoAuthorize = res.AutoAuthorize
+				for _, rp := range res.Nodes {
+					AuthorizeNodeList.Set(rp)
 				}
+				log.Infof("Node limit: %d,Auth authorize:%v,Node list length:%v", LimitNode, AutoAuthorize, AuthorizeNodeList.Len())
+			} else {
+				log.Errorf("Error setting node limit: %v", err)
+				time.Sleep(5 * time.Second)
+				goto Retry
+			}
+
+		}()
+
+	case "slave":
+		go func() {
+			proxyU, err := url.Parse(os.Getenv("CONTROL_PROXY_HOST"))
+			proxyClient := httpclient.NewAppClient(httpclient.AppConfig{
+				Insecure: appConfig.Insecure,
+				Identity: appConfig.Identity,
+			}, *proxyU)
+		Retry:
+			res, err := proxyClient.GetNodeLimitFromMaster()
+			if err == nil {
+				SetNodeLimit(res)
+				log.Infof("Node limit: %d,Auth authorize:%v,Node list length:%v", LimitNode, AutoAuthorize, AuthorizeNodeList.Len())
+			} else {
+				log.Errorf("Error setting node limit: %v", err)
+				time.Sleep(5 * time.Second)
+				goto Retry
 			}
 		}()
-	case "slave":
-		proxyU, err := url.Parse(os.Getenv("CONTROL_PROXY_HOST"))
-		proxyClient := httpclient.NewAppClient(httpclient.AppConfig{
-			Insecure: appConfig.Insecure,
-			Identity: appConfig.Identity,
-		}, *proxyU)
-		res, err := proxyClient.GetNodeLimitFromMaster()
-		if err == nil {
-			SetNodeLimit(res)
-			log.Infof("Node limit: %d,Auth authorize:%v,Node list length:%v", LimitNode, AutoAuthorize, AuthorizeNodeList.Len())
-		} else {
-			log.Errorf("Error setting node limit: %v", err)
-		}
+
 	}
 	return &Authorization{
 		AppConfig: appConfig,
