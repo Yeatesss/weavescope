@@ -12,9 +12,8 @@ ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH
 RUN make BUILD_IN_CONTAINER=false GO_BUILD_INSTALL_DEPS= prog/scope
 
 # stage 2
-FROM alpine:3.18
+FROM alpine:3.11.3
 WORKDIR /home/weave
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories && apk update
 RUN apk add --no-cache bash conntrack-tools iproute2 util-linux curl
 COPY --from=builder /root/go/src/github.com/weaveworks/scope/prog/scope /home/weave/
 
